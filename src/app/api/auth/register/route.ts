@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { MongoDBUserRepository } from '@/modules/auth/infrastructure/repositories/mongodb-user.repository'
+import { RegisterUseCase } from '@/modules/auth/domain/usecases/register.usecase'
+import { AppError } from '@/lib/errors'
+
+/**
+ * POST /api/auth/register
+ * Register a new account via email/password.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { name, email, password } = body
+
+    // Initialize dependencies (manual DI)
+    const userRepository = new MongoDBUserRepository()
+    const registerUseCase = new RegisterUseCase(userRepository)
+
+    const user = await registerUseCase.execute({ name, email, password })
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Registration successful',
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        },
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    // Handle AppErrors (operational errors)
+    if (error instanceof AppError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: error.message,
+          // Include field errors if it is a ValidationError
+          ...(('fields' in error) && { fields: (error as { fields?: unknown }).fields }),
+        },
+        { status: error.statusCode }
+      )
+    }
+
+    // Unknown error — log on the server, return 500
+    console.error('[POST /api/auth/register]', error)
+    return NextResponse.json(
+      { success: false, message: 'An unexpected error occurred, please try again' },
+      { status: 500 }
+    )
+  }
+}
