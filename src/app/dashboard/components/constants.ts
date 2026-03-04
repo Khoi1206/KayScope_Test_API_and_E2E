@@ -36,7 +36,7 @@ export const mkBlankSnapshot = (): TabSnapshot => ({
 
 /** Normalize legacy body formats (json → raw) and ensure formData exists */
 function prepareBody(raw: ReqBody | undefined): ReqBody {
-  let b = raw ?? EMPTY_BODY
+  let b = { ...(raw ?? EMPTY_BODY), formData: [...(raw ?? EMPTY_BODY).formData ?? []] }
   if (b.type === 'json') b = { ...b, type: 'raw', rawType: 'json' }
   if (!b.rawType) b = { ...b, rawType: 'json' }
   if (!b.formData) b = { ...b, formData: [] }

@@ -9,12 +9,14 @@ export function useEnvironments(currentWs: Workspace | null) {
   const [currentEnvId, setCurrentEnvId] = useState<string>('none')
   const [envEditorTarget, setEnvEditorTarget] = useState<Environment | null | 'new'>(null)
 
-  /* Load environments when workspace changes */
+  /* Load environments when workspace changes (stale guard prevents race on rapid ws switch) */
   useEffect(() => {
     if (!currentWs) { setEnvironments([]); setCurrentEnvId('none'); return }
+    let stale = false
     apiFetch<{ environments: Environment[] }>(`/api/environments?workspaceId=${currentWs.id}`)
-      .then(({ environments: envs }) => { setEnvironments(envs); setCurrentEnvId('none') })
+      .then(({ environments: envs }) => { if (!stale) { setEnvironments(envs); setCurrentEnvId('none') } })
       .catch(console.error)
+    return () => { stale = true }
   }, [currentWs])
 
   const saveEnvironment = useCallback(async (name: string, vars: EnvVar[]) => {

@@ -41,16 +41,18 @@ export function useCollectionTree(
   const callbacksRef = useRef(callbacks)
   callbacksRef.current = callbacks
 
-  /* Load collections when workspace changes */
+  /* Load collections when workspace changes (stale guard prevents race on rapid ws switch) */
   useEffect(() => {
     if (!currentWs) { setCollections([]); setRequestsByCol({}); setFoldersByCol({}); setExpandedCols(new Set()); setExpandedFolders(new Set()); return }
+    let stale = false
     setLoadingCols(true)
     setCollections([]); setRequestsByCol({}); setFoldersByCol({}); setExpandedCols(new Set()); setExpandedFolders(new Set())
     setShowColCreate(false); setNewColName('')
     apiFetch<{ collections: Collection[] }>(`/api/collections?workspaceId=${currentWs.id}`)
-      .then(({ collections: cols }) => setCollections(cols))
+      .then(({ collections: cols }) => { if (!stale) setCollections(cols) })
       .catch(console.error)
-      .finally(() => setLoadingCols(false))
+      .finally(() => { if (!stale) setLoadingCols(false) })
+    return () => { stale = true }
   }, [currentWs])
 
   /* Pre-compute folder trees for all expanded collections */
@@ -181,7 +183,7 @@ export function useCollectionTree(
     try {
       await apiFetch(`/api/folders/${folderId}`, { method: 'DELETE' })
       // Demote affected tabs only after confirmed server-side delete
-      callbacksRef.current.onRequestsRemoved(req => !remainingIds.has(req.id))
+      callbacksRef.current.onRequestsRemoved(req => req.collectionId === colId && !remainingIds.has(req.id))
     } catch (e) {
       console.error(e)
       setFoldersByCol(prev => ({ ...prev, [colId]: prevFolders }))
