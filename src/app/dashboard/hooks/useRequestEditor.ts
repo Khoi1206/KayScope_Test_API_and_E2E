@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { runScript } from '@/lib/scripting/script-runner'
 import { useDebounce } from './useDebounce'
@@ -74,6 +74,18 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
     dns: number; connect: number; tls: number; firstByte: number; download: number; total: number
   } | null>(null)
 
+  /* ── Variable overrides (user-typed inline overrides from URL-bar tooltip) ── */
+  const [varOverrides, setVarOverrides] = useState<Record<string, string>>({})
+
+  /** Set or clear a single variable override. Passing '' removes it. */
+  const setVarOverride = useCallback((name: string, value: string) => {
+    setVarOverrides(prev =>
+      value === ''
+        ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== name))
+        : { ...prev, [name]: value }
+    )
+  }, [])
+
   /* ── Save state ── */
   const [isSaving, setIsSaving] = useState(false)
   const [saveFlash, setSaveFlash] = useState(false)
@@ -121,7 +133,8 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
     reqName, method, url, params, headers, body, auth, activeTab,
     preRequestScript, postRequestScript, tempVars,
     preScriptResult, postScriptResult,
-    response, responseTab, requestTiming, sendError, isSending: false,
+    response, responseTab, requestTiming, sendError, isSending,
+    varOverrides,
   })
 
   const restoreSnapshot = (s: TabSnapshot) => {
@@ -137,6 +150,7 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
     setResponse(s.response); setResponseTab(s.responseTab)
     setRequestTiming(s.requestTiming); setSendError(s.sendError)
     setIsSending(s.isSending)
+    setVarOverrides(s.varOverrides ?? {})
     setSaveError('')
   }
 
@@ -158,10 +172,11 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
     if (filtered.length === 0) {
       setTabs([])
       setActiveTabId('')
-      setActiveReq(null); setIsDraft(false)
+      setActiveReq(null); setIsDraft(false); setDraftColId(null); setDraftFolderId(null)
       setReqName('New Request'); setMethod('GET'); setUrl('')
       setParams([]); setHeaders([...DEFAULT_HEADERS]); setBody({ ...EMPTY_BODY, formData: [] }); setAuth({ ...EMPTY_AUTH })
       setPreRequestScript(''); setPostRequestScript(''); setTempVars({})
+      setVarOverrides({})
       setResponse(null); setSendError(null); setRequestTiming(null)
       setPreScriptResult(null); setPostScriptResult(null); setIsSending(false)
       return
@@ -313,7 +328,7 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method, url, params, headers, body, auth,
-          environmentVariables: { ...envVars, ...sessionTempVars },
+          environmentVariables: { ...envVars, ...sessionTempVars, ...varOverrides },
           requestId: activeReq?.id,
           workspaceId: currentWs?.id,
         }),
@@ -349,18 +364,19 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
         download: Math.round(res.durationMs * 0.2),
         total: res.durationMs,
       }
+      // Route response to correct destination (active state or tab snapshot)
       if (activeTabIdRef.current !== sendTabId) {
         setTabs(prev => prev.map(t => {
           if (t.id !== sendTabId) return t
           const base = t.snapshot ?? mkBlankSnapshot()
           return { ...t, snapshot: { ...base, response: res, responseTab: 'Pretty' as const, requestTiming: timing, isSending: false, sendError: null } }
         }))
-        return
+      } else {
+        setResponse(res); setResponseTab('Pretty')
+        setRequestTiming(timing)
       }
-      setResponse(res); setResponseTab('Pretty')
-      setRequestTiming(timing)
 
-      // 3. Post-request script
+      // 3. Post-request script (always runs — env updates must not be lost)
       if (postRequestScript.trim()) {
         const result = await runScript(postRequestScript, {
           envVars,
@@ -370,10 +386,18 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
             headers: res.headers, body: res.body,
           },
         })
-        setPostScriptResult(result)
         sessionTempVars = result.tempVars
-        setTempVars(result.tempVars)
         applyEnvUpdate(result.envVars)
+        if (activeTabIdRef.current === sendTabId) {
+          setPostScriptResult(result)
+          setTempVars(result.tempVars)
+        } else {
+          setTabs(prev => prev.map(t => {
+            if (t.id !== sendTabId) return t
+            const base = t.snapshot ?? mkBlankSnapshot()
+            return { ...t, snapshot: { ...base, postScriptResult: result, tempVars: result.tempVars } }
+          }))
+        }
       }
 
       if (sidebarSection === 'history') loadHistory()
@@ -391,7 +415,7 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
         setSendError(errMsg)
       }
     }
-    finally { if (!controller.signal.aborted) setIsSending(false) }
+    finally { if (!controller.signal.aborted && activeTabIdRef.current === sendTabId) setIsSending(false) }
   }
 
   return {
@@ -412,6 +436,7 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
     preRequestScript, setPreRequestScript,
     postRequestScript, setPostRequestScript,
     tempVars, setTempVars,
+    varOverrides, setVarOverride,
     preScriptResult, postScriptResult,
     /* tabs */
     tabs, setTabs,

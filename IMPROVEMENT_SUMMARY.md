@@ -1,6 +1,6 @@
 # KayScope v1.1 — Improvement Summary
 
-> **Date:** March 4, 2026
+> **Date:** March 6, 2026
 > **Stack:** Next.js 14.2.35 · NextAuth v4 · MongoDB 6.21.0 · Tailwind CSS 3.4.1 · Blockly 12.4.1 · Playwright 1.58.2
 
 ---
@@ -17,8 +17,16 @@
 8. [Phase 6 — Component Extraction](#phase-6--component-extraction)
 9. [Phase 7 — Web Worker Script Sandboxing](#phase-7--web-worker-script-sandboxing)
 10. [Phase 8 — Design Patterns (Factory & Singleton)](#phase-8--design-patterns-factory--singleton)
-11. [Final File Inventory](#final-file-inventory)
-12. [Metrics & Results](#metrics--results)
+11. [Phase 9 — Performance & Resilience](#phase-9--performance--resilience)
+12. [Phase 10 — Context & Strategy Patterns](#phase-10--context--strategy-patterns)
+13. [Bug Check Rounds](#bug-check-rounds)
+14. [Phase 11 — Postman-Style Variable Tooltip](#phase-11--postman-style-variable-tooltip)
+15. [Performance Audit](#performance-audit)
+16. [Phase 12 — Variable Override Input](#phase-12--variable-override-input)
+17. [Bug Check Round 5](#bug-check-round-5)
+18. [Logic Audit](#logic-audit)
+19. [Final File Inventory](#final-file-inventory)
+20. [Metrics & Results](#metrics--results)
 
 ---
 
@@ -95,14 +103,16 @@ AppShell (326 lines — orchestrator)
 │   ├── History panel
 │   ├── Activity panel
 │   └── Tests panel (→ TestsSidebarPanel)
-├── RequestEditor (219 lines)
+├── RequestEditor (395 lines)
 │   ├── Name bar + Save button
-│   ├── URL bar + Method selector + Send
+│   ├── URL bar + Method selector + Send button
+│   ├── Variable tooltip ({{var}} hover with source badge + "Variables in request" list)
 │   ├── Tab strip (Params, Headers, Body, Auth, Pre/Post scripts)
 │   └── Script Console output
 ├── ResponsePanel (140 lines)
 │   ├── Status bar (status, time, size)
 │   └── Sub-tabs (Pretty, Raw, Headers, Cookies, Timing)
+├── ErrorBoundary (75 lines — React class, wraps Sidebar / RequestEditor / Test Builder)
 └── Tab bar (request tabs with snapshot system)
 ```
 
@@ -110,14 +120,20 @@ AppShell (326 lines — orchestrator)
 
 ```
 hooks/
-├── index.ts           (7 lines — barrel export)
-├── useWorkspaces.ts   (77 lines — workspace CRUD, dropdown, outside-click)
-├── useEnvironments.ts (60 lines — env CRUD, SSE reload)
-├── useHistoryActivity.ts (76 lines — history + activity, pagination)
-├── useLiveSync.ts     (58 lines — SSE EventSource, targeted refresh)
-├── useCollectionTree.ts (298 lines — collection/folder/request CRUD, lazy-load, import/export)
-├── useToast.ts        (14 lines — toast state + auto-dismiss)
-└── useRequestEditor.ts (446 lines — editor state, tab snapshots, save/send, scripting)
+├── index.ts              (7 lines — barrel export)
+├── useWorkspaces.ts      (77 lines — workspace CRUD, dropdown, outside-click)
+├── useEnvironments.ts    (68 lines — env CRUD, SSE reload, stale guard)
+├── useHistoryActivity.ts (105 lines — history + activity, pagination, stale guards)
+├── useLiveSync.ts        (58 lines — SSE EventSource, targeted refresh)
+├── useCollectionTree.ts  (315 lines — collection/folder/request CRUD, lazy-load, import/export)
+├── useDebounce.ts        (18 lines — generic debounce hook)
+└── useRequestEditor.ts   (442 lines — editor state, tab snapshots, save/send, scripting)
+```
+
+### Global State
+
+```
+ToastContext.tsx   (65 lines — React Context, ToastProvider + useToastContext)
 ```
 
 ---
@@ -367,39 +383,265 @@ A shared `addTabAndActivate(meta, snapshot)` helper in `useRequestEditor` captur
 
 ---
 
+## Phase 9 — Performance & Resilience
+
+### ErrorBoundary
+
+A React class component (`ErrorBoundary.tsx`, 75 lines) wrapping the three main render zones.
+
+| Zone | Wraps |
+|------|-------|
+| Sidebar | `SidebarPanel` |
+| Request Editor | `RequestEditor` + `ResponsePanel` together |
+| Test Builder | `TestBuilderPanel` |
+
+Each boundary shows a recovery UI (crash message + **Try again** button) instead of a white screen. `componentDidCatch` logs to console with the zone label.
+
+### React.memo on Heavy Components
+
+`React.memo` applied to all four heavy pure-render components:
+
+| Component | Why memoized |
+|-----------|-------------|
+| `Navbar` | Re-renders only when workspace/env list changes |
+| `SidebarPanel` | Large tree — avoids re-render on every response update |
+| `RequestEditor` | Isolated from response state |
+| `ResponsePanel` | Isolated from editor state |
+
+### useDebounce Hook
+
+New `useDebounce<T>(value, delay)` hook (18 lines) used to debounce URL → query-param sync. Prevents `setParams` from firing on every keystroke — only runs 300 ms after typing stops.
+
+---
+
+## Phase 10 — Context & Strategy Patterns
+
+### React Context Pattern — ToastContext
+
+Replaced prop-drilled `showToast` callback with a proper React Context.
+
+| File | Role |
+|------|------|
+| `ToastContext.tsx` | `ToastProvider` with `timerRef` race guard + `useToastContext` hook |
+| `page.tsx` | Wraps `<AppShell>` in `<ToastProvider>` |
+| `useCollectionTree.ts` | Calls `useToastContext()` directly — no prop needed |
+
+`useToastContext()` throws a dev-time error if used outside `<ToastProvider>`.
+
+### Strategy Pattern — Auth Resolution
+
+`auth-strategy.ts` replaces an if/else chain in the execute route with a strategy registry.
+
+| Strategy | Headers produced |
+|----------|-----------------|
+| `none` | `{}` |
+| `bearer` | `Authorization: Bearer <token>` |
+| `basic` | `Authorization: Basic <base64>` |
+| `api-key` | `<customHeader>: <key>` |
+
+`resolveAuthHeaders(auth, interpolateFn)` is the public API. All strategies are variable-interpolation aware.
+
+---
+
+## Bug Check Rounds
+
+Four structured audit rounds after the main phases, fixing a total of **13 bugs** in `useRequestEditor.ts`, `useCollectionTree.ts`, `useHistoryActivity.ts`, `useEnvironments.ts`, and `ToastContext.tsx`.
+
+### Round 1 (3 bugs)
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `ToastContext.tsx` | Race condition — rapid `showToast` calls leaked multiple auto-dismiss timers | Added `timerRef` to cancel previous timer before starting new one |
+| 2 | `useRequestEditor.ts` | Abort race — `catch`/`finally` ran even for aborted requests, clobbering active-tab state | Guard with `if (controller.signal.aborted) return` |
+| 3 | `useRequestEditor.ts` | `showToast` missing from `handleImportFile` dependency array | Added to deps |
+
+### Round 2 (4 bugs)
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `useHistoryActivity.ts` | Double-click on "Load more" fired duplicate pagination requests | Added `loadingMoreHistRef` / `loadingMoreActRef` guards |
+| 2 | `useEnvironments.ts` | Rapid workspace switch caused stale env response to overwrite new workspace's envs | Added `stale` flag in fetch effect |
+| 3 | `useHistoryActivity.ts` | Auto-load effects had race condition on workspace switch | Rewrote as inline async + stale flag per effect |
+| 4 | `constants.ts` | `prepareBody` returned shared `EMPTY_BODY` reference — mutations in one tab leaked into another | Always spread: `{ ...(raw ?? EMPTY_BODY), formData: [...] }` |
+
+### Round 3 (2 bugs)
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `useCollectionTree.ts` | `deleteFolder` called `onRequestsRemoved` for requests from ANY collection, not just the deleted folder's collection | Scoped predicate: `req.collectionId === colId && !remainingIds.has(req.id)` |
+| 2 | `useCollectionTree.ts` | Collection fetch on workspace switch had no stale guard — late response could overwrite new workspace's collections | Added `stale` flag in fetch effect |
+
+### Round 4 (4 bugs)
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `useRequestEditor.ts` | `finally { setIsSending(false) }` fired on whichever tab was active, not the originating tab — Tab B's spinner died when Tab A finished | Guarded: `activeTabIdRef.current === sendTabId` |
+| 2 | `useRequestEditor.ts` | On tab switch during request, success path did early `return` — post-request script was silently skipped (env-var updates + tests lost) | Removed early return; post-script always runs with tab-aware state routing |
+| 3 | `useRequestEditor.ts` | `closeTab` (all-tabs-closed branch) left `draftColId`/`draftFolderId` stale | Added `setDraftColId(null); setDraftFolderId(null)` |
+| 4 | `useRequestEditor.ts` | `captureSnapshot()` hardcoded `isSending: false` — switching away from a sending tab lost the spinner state | Changed to capture actual `isSending` value |
+
+---
+
+## Phase 11 — Postman-Style Variable Tooltip
+
+### Feature
+
+When the cursor moves inside a `{{variable}}` token in the URL bar, a popup appears below showing the resolved value, its source, and a list of all variables used in the URL.
+
+### Popup States
+
+| State | Triggered by |
+|-------|-------------|
+| **Single variable view** | Cursor positioned inside `{{varName}}` |
+| **Variable list view** | Clicking "Variables in request →" |
+| **Dismissed** | Click/tab outside the URL input |
+
+### Source Badges
+
+| Badge | Color | Meaning |
+|-------|-------|---------|
+| `E` Environment | Blue | Value set in the active environment |
+| `V` Script Variable | Purple | Set by `pm.variables.set()` in a pre/post script |
+| `?` Not set | Yellow | `{{var}}` found in URL but not defined anywhere |
+
+### Implementation
+
+| Item | Detail |
+|------|--------|
+| `getVarAtCursor(text, pos)` | Regex exec loop — finds which `{{token}}` the caret is inside |
+| `extractVars(text)` | Deduped list of all `{{vars}}` in the URL |
+| `resolveVar(name, envVars, tempVars)` | Returns `{ value, source }` — priority: env > temp > none |
+| `blurTimerRef` | 150 ms blur guard so clicking inside the popup doesn't dismiss it |
+| `envVars` in AppShell | `useMemo` from active environment's enabled variables |
+| `tempVars` from `useRequestEditor` | Script-set variables passed down directly |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `RequestEditor.tsx` | Added `getVarAtCursor`, `extractVars`, `resolveVar` helpers; URL bar replaced with wrapper + popup UI; `envVars`/`tempVars` props added (219 → 395 lines) |
+| `AppShell.tsx` | Added `useMemo` import; `resolvedEnvVars` memo; `tempVars` destructured; new props wired |
+
+---
+
+## Performance Audit
+
+Six targeted memoization improvements applied after Phase 11, eliminating unnecessary re-renders.
+
+| # | Location | Problem | Fix |
+|---|----------|---------|-----|
+| 1 | `AppShell.tsx` | `currentEnv` recomputed on every render | `useMemo` on `environments.find(e => e.id === currentEnvId)` |
+| 2 | `AppShell.tsx` | `stableSetRequestsByCol` recreated on every render | `useCallback` wrapper |
+| 3 | `RequestEditor.tsx` | `activeVarInfo` recomputed on every keystroke | `useMemo` on `[activeVar, envVars, tempVars, varOverrides]` |
+| 4 | `SidebarPanel.tsx` | `SIDEBAR_ITEMS` array literal re-created each render | Hoisted to module scope as a constant |
+| 5 | `SidebarPanel.tsx` | `ACTION_COLORS` object literal re-created each render | Hoisted to module scope as a constant |
+| 6 | `SidebarPanel.tsx` | `toggleFolder` arrow function recreated each render | Wrapped in `useCallback([], [])` |
+
+---
+
+## Phase 12 — Variable Override Input
+
+### Feature
+
+An inline input field was added to the variable tooltip popup, allowing users to type a temporary override value for any `{{variable}}` without modifying the active environment.
+
+### How It Works
+
+- `varOverrides: Record<string, string>` state in `useRequestEditor` — highest-priority variable source
+- `setVarOverride(name, value)` callback (stable, wrapped in `useCallback`) — passing `''` removes the key
+- `resolveVar` extended with a fourth `overrides` parameter; returns source `'override'` (purple **O** badge)
+- Override merged **last** in `sendRequest`: `{ ...envVars, ...sessionTempVars, ...varOverrides }`
+- `onFocus={cancelBlur}` added to the popup container to prevent dismissal when clicking the override input
+
+### Source Badge Added
+
+| Badge | Color | Meaning |
+|-------|-------|---------|
+| `O` Override | Purple | Inline override typed by the user in the tooltip |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `useRequestEditor.ts` | Added `varOverrides` state + `setVarOverride` callback; merged into `sendRequest` |
+| `RequestEditor.tsx` | Extended `resolveVar` with overrides param; added override input in tooltip; `onFocus={cancelBlur}` on popup |
+| `AppShell.tsx` | Threaded `varOverrides` + `setVarOverride` down to `RequestEditor` |
+| `types.ts` | `TabSnapshot` now includes `varOverrides: Record<string, string>` |
+
+---
+
+## Bug Check Round 5
+
+Two bugs found and fixed.
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `mongodb-history.repository.ts` / `history/route.ts` | History "Load More" always returned the same first 50 rows — `skip` parameter was defined in the interface but ignored throughout the call chain | Added `skip` param to repository interface, implementation (`.skip(n).limit(m)`), and API route query-string parsing |
+| 2 | `useRequestEditor.ts` | `varOverrides` not cleared when all tabs were closed — stale overrides bled into the next blank tab | Added `setVarOverrides({})` to the all-tabs-closed branch of `closeTab` |
+
+---
+
+## Logic Audit
+
+Systematic correctness review of every route and hook. Six logic issues found and fixed.
+
+| # | Location | Logic Issue | Fix |
+|---|----------|------------|-----|
+| 1 | `execute/route.ts` — `buildUrl` | Double query params — the raw URL bar string (e.g. `https://api.example.com?foo=bar`) was passed directly to `new URL()`, then the params-table entries were appended again, creating duplicates | Strip inline query string from resolved URL before constructing the `URL` object; params table is the single source of truth |
+| 2 | `constants.ts` — `TabFactory.fromHistory` | History tabs stored the full executed URL (with query string) in `url` and left `params: []` — with fix #1 no longer re-parsing inline query, those params would be silently lost on re-send | Parse the history URL on tab creation; set `url` to base path and populate `params` array from the query string |
+| 3 | `useEnvironments.ts` — `reloadEnvironments` | After an SSE-triggered reload the `currentEnvId` was never validated against the new list — if a teammate deleted the active environment, it would remain as the selected env and resolve to empty vars silently | After reloading, compare `currentEnvId` against the new list and reset to `'none'` if it no longer exists |
+| 4 | `types.ts` + `useRequestEditor.ts` + `constants.ts` | `varOverrides` was workspace-global state — switching tabs did not save/restore per-tab overrides, so an override typed in Tab A bled into every other tab | Added `varOverrides: Record<string, string>` to `TabSnapshot`; included it in `captureSnapshot`, `restoreSnapshot`, `mkBlankSnapshot`, `TabFactory.fromRequest`, and `TabFactory.fromHistory` |
+| 5 | `requests/[id]/route.ts`, `requests/route.ts` (POST), `folders/[id]/route.ts`, `folders/route.ts` (POST) | Mutation routes (`GET`/`PUT`/`DELETE` on requests; `PUT`/`DELETE` on folders; `POST` for creating requests and folders) only required a valid session — they never verified the caller was a workspace member | Added `assertMember` / `assertFolderMember` helpers that look up the collection's workspace and throw `UnauthorizedError` for non-members |
+| 6 | `workspaces/route.ts` — POST | No server-side workspace name validation — only the client enforced ≥ 2 chars; calling the API directly could create blank-name workspaces | Trim incoming name and throw `ValidationError` if `< 2` characters |
+
+---
+
 ## Final File Inventory
 
-### Dashboard Components (5 files, 1,268 lines total)
+### Dashboard Components (6 files)
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `AppShell.tsx` | 326 | Orchestrator — hooks, modals, ref bridge, layout |
+| `AppShell.tsx` | 330 | Orchestrator — hooks, modals, ref bridge, layout |
 | `Navbar.tsx` | 164 | Top navigation bar |
 | `SidebarPanel.tsx` | 419 | Left sidebar with 5 sections |
-| `RequestEditor.tsx` | 219 | Request editor with tabs |
+| `RequestEditor.tsx` | 395 | Request editor with tabs + variable tooltip |
 | `ResponsePanel.tsx` | 140 | Response display with sub-tabs |
+| `ErrorBoundary.tsx` | 75 | React class error boundary (3 zones) |
 
-### Custom Hooks (8 files, 1,056 lines total)
+### Custom Hooks (9 files)
 
 | File | Lines | Purpose |
 |------|-------|---------|
 | `index.ts` | 7 | Barrel export |
 | `useWorkspaces.ts` | 77 | Workspace CRUD |
-| `useEnvironments.ts` | 60 | Environment CRUD |
-| `useHistoryActivity.ts` | 76 | History + activity |
+| `useEnvironments.ts` | 70 | Environment CRUD, stale guard, SSE stale-envId reset |
+| `useHistoryActivity.ts` | 105 | History + activity, pagination guards |
 | `useLiveSync.ts` | 58 | SSE real-time sync |
-| `useCollectionTree.ts` | 298 | Collection tree |
-| `useToast.ts` | 14 | Toast notifications |
-| `useRequestEditor.ts` | 446 | Request editor state |
+| `useCollectionTree.ts` | 315 | Collection tree, stale guard |
+| `useDebounce.ts` | 18 | Generic debounce hook |
+| `useRequestEditor.ts` | 460 | Request editor state, tab snapshots, var overrides |
 
-### Scripting Module (4 files, ~438 lines total)
+### Global State
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `ToastContext.tsx` | 65 | React Context — global toast notifications |
+
+### Scripting Module (4 files)
 
 | File | Lines | Purpose |
 |------|-------|---------|
 | `script-sandbox.ts` | 213 | Core execution logic + pm API |
-| `script-worker-pool.ts` | 160 | Singleton Worker pool (reuse workers) |
+| `script-worker-pool.ts` | 200 | Singleton Worker pool (reuse workers) |
 | `script-runner.ts` | 43 | Async runner — delegates to pool + fallback |
 | `script-worker.ts` | 22 | Worker entry point |
+
+### Auth Module
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `auth-strategy.ts` | 80 | Strategy Pattern — auth type → HTTP headers |
 
 ### Other Dashboard Components (10 files)
 
@@ -414,9 +656,9 @@ A shared `addTabAndActivate(meta, snapshot)` helper in `useRequestEditor` captur
 | `TestBuilderPanel.tsx` | Test builder dashboard panel |
 | `KVEditor.tsx` | Key-value pair editor |
 | `SyntaxHighlight.tsx` | JSON syntax highlighting |
-| `types.ts` | Client-side type definitions (61 lines) |
-| `constants.ts` | Shared constants + TabFactory (~130 lines) |
-| `utils.ts` | Utility functions (71 lines) |
+| `types.ts` | Client-side type definitions |
+| `constants.ts` | Shared constants + TabFactory |
+| `utils.ts` | Utility functions |
 
 ### Test Builder (9 files)
 
@@ -443,8 +685,9 @@ Phase 5 Start:   1,714 lines  ████████████████�
 Round 4:         1,314 lines  ██████████████████████████
 Round 5:           697 lines  ██████████████
 Round 6:           326 lines  ██████▌
+Current:           330 lines  ██████▌   (stable — new features added to sub-components)
                                ─────────────────────────
-                               81% total reduction
+                               81% total reduction from original
 ```
 
 ### Total Issues Fixed
@@ -456,8 +699,25 @@ Round 6:           326 lines  ██████▌
 | Low severity audit issues | 10 |
 | Advisory improvements | 6 |
 | State/performance fixes | 5 |
-| Post-refactor bug fixes | 6 |
-| **Total** | **39** |
+| Post-refactor bug fixes (Phase 6) | 6 |
+| Bug Check Round 1 | 3 |
+| Bug Check Round 2 | 4 |
+| Bug Check Round 3 | 2 |
+| Bug Check Round 4 | 4 |
+| Performance audit improvements | 6 |
+| Bug Check Round 5 | 2 |
+| Logic audit fixes | 6 |
+| **Total** | **66** |
+
+### Feature Surface (Phase 11 & 12)
+
+| Feature | Description |
+|---------|-------------|
+| Variable tooltip | Click inside `{{var}}` in URL bar → popup with resolved value |
+| Source attribution | E (Environment), V (Script Variable), O (Override), ? (Not set) badges |
+| Variable list | "Variables in request →" expands all `{{vars}}` in the URL |
+| Live resolution | `envVars` recomputes on active environment change; `tempVars` updates after each script run |
+| Variable override | Inline input in tooltip to type a temporary value — highest priority, per-tab, cleared when tab closes |
 
 ### Security Hardening
 
@@ -466,9 +726,10 @@ Round 6:           326 lines  ██████▌
 - ✅ Script sandboxing via Web Worker (isolated thread, 10s timeout, no DOM access)
 - ✅ Environment variable secret masking
 - ✅ JWT strategy with 30-day sessions
-- ✅ Server-side auth checks on all API routes
+- ✅ Server-side auth + workspace-membership checks on all API routes
+- ✅ Server-side input validation on all write endpoints (including workspace name length)
 - ✅ Custom error classes with safe error messages (no stack traces to client)
-- ✅ Input validation on all write endpoints
+- ✅ URL query params de-duplicated at execution time (params table is single source of truth)
 
 ### TypeScript Compliance
 

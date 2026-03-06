@@ -16,14 +16,19 @@ function interpolate(str: string, vars: Record<string, string>): string {
   return str.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
-/** Build the final URL with query params merged in. */
+/** Build the final URL with query params merged in.
+ *  The inline query string is stripped from rawUrl so the params table is
+ *  the single source of truth — prevents duplicates when the URL bar still
+ *  contains ?... that was previously synced into the params KV editor. */
 function buildUrl(
   rawUrl: string,
   params: KeyValuePair[],
   vars: Record<string, string>
 ): URL {
   const resolved = interpolate(rawUrl.trim(), vars)
-  const url = new URL(resolved.startsWith('http') ? resolved : `https://${resolved}`)
+  const qIdx = resolved.indexOf('?')
+  const baseResolved = qIdx === -1 ? resolved : resolved.slice(0, qIdx)
+  const url = new URL(baseResolved.startsWith('http') ? baseResolved : `https://${baseResolved}`)
   for (const p of params) {
     if (p.enabled && p.key) {
       url.searchParams.append(interpolate(p.key, vars), interpolate(p.value, vars))

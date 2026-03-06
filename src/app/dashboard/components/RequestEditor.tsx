@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useState, useRef, useMemo } from 'react'
 import type {
   HttpMethod, KV, ReqBody, ReqAuth,
   RawBodyType, ScriptResult,
@@ -10,6 +10,47 @@ import {
 } from './constants'
 import { KVEditor } from './KVEditor'
 
+/* ══════════════════════════════════════════════════════════════
+   Variable tooltip helpers
+   ══════════════════════════════════════════════════════════════ */
+
+/** Return the variable name if the caret sits inside a {{varName}} token, else null. */
+function getVarAtCursor(text: string, pos: number): string | null {
+  const re = /\{\{(\w+)\}\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    // inside the token (exclusive of the outer braces is fine)
+    if (pos > m.index && pos < m.index + m[0].length) return m[1]
+  }
+  return null
+}
+
+/** Extract all unique variable names found in a string. */
+function extractVars(text: string): string[] {
+  const re = /\{\{(\w+)\}\}/g
+  const seen: Record<string, boolean> = {}
+  const result: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    if (!seen[m[1]]) { seen[m[1]] = true; result.push(m[1]) }
+  }
+  return result
+}
+
+type VarSource = 'override' | 'env' | 'temp' | 'none'
+
+function resolveVar(
+  name: string,
+  envVars: Record<string, string>,
+  tempVars: Record<string, string>,
+  overrides: Record<string, string>,
+): { value: string; source: VarSource } {
+  if (name in overrides) return { value: overrides[name], source: 'override' }
+  if (name in envVars) return { value: envVars[name], source: 'env' }
+  if (name in tempVars) return { value: tempVars[name], source: 'temp' }
+  return { value: '', source: 'none' }
+}
+
 interface RequestEditorProps {
   /* request meta */
   reqName: string
@@ -18,6 +59,12 @@ interface RequestEditorProps {
   setMethod: (v: HttpMethod) => void
   url: string
   setUrl: (v: string) => void
+  /* resolved variable maps for tooltip */
+  envVars: Record<string, string>
+  tempVars: Record<string, string>
+  /* inline variable overrides (user-typed in the tooltip) */
+  varOverrides: Record<string, string>
+  onSetVarOverride: (name: string, value: string) => void
   /* save */
   saveRequest: () => void
   sendRequest: () => void
@@ -58,7 +105,38 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
     body, setBody, auth, setAuth,
     preRequestScript, setPreRequestScript, postRequestScript, setPostRequestScript,
     preScriptResult, postScriptResult,
+    envVars, tempVars,
+    varOverrides, onSetVarOverride,
   } = props
+
+  /* ── Variable tooltip state ── */
+  const [activeVar, setActiveVar] = useState<string | null>(null)
+  const [showVarList, setShowVarList] = useState(false)
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const urlVars = useMemo(() => extractVars(url), [url])
+  const activeVarInfo = useMemo(
+    () => (activeVar ? resolveVar(activeVar, envVars, tempVars, varOverrides) : null),
+    [activeVar, envVars, tempVars, varOverrides]
+  )
+
+  const handleUrlCursor = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const pos = e.currentTarget.selectionStart ?? 0
+    const found = getVarAtCursor(e.currentTarget.value, pos)
+    setActiveVar(found)
+    if (found) setShowVarList(false)
+  }
+
+  const handleUrlBlur = () => {
+    blurTimerRef.current = setTimeout(() => {
+      setActiveVar(null)
+      setShowVarList(false)
+    }, 150)
+  }
+
+  const cancelBlur = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+  }
 
   return (
     <>
@@ -74,17 +152,166 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
       </div>
 
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800 shrink-0">
-        <select value={method} onChange={e => setMethod(e.target.value as HttpMethod)}
-          className={`bg-gray-800 border border-gray-700 rounded-md px-2 py-2 text-sm font-bold focus:outline-none focus:border-orange-500 ${METHOD_COLOR[method]}`}>
-          {HTTP_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <input value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendRequest()}
-          placeholder="Enter request URL" className="flex-1 bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-orange-500 font-mono" />
-        <button onClick={sendRequest} disabled={isSending || !url.trim()}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-md text-sm transition">
-          {isSending ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg> : 'Send'}
-        </button>
+      <div className="px-4 py-3 border-b border-gray-800 shrink-0">
+        <div className="flex items-center gap-2">
+          <select value={method} onChange={e => setMethod(e.target.value as HttpMethod)}
+            className={`bg-gray-800 border border-gray-700 rounded-md px-2 py-2 text-sm font-bold focus:outline-none focus:border-orange-500 ${METHOD_COLOR[method]}`}>
+            {HTTP_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+
+          {/* URL input wrapper — relative so the popup can be positioned below it */}
+          <div className="relative flex-1">
+            <input
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendRequest()}
+              onClick={handleUrlCursor}
+              onKeyUp={handleUrlCursor}
+              onSelect={handleUrlCursor}
+              onBlur={handleUrlBlur}
+              placeholder="Enter request URL"
+              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-orange-500 font-mono"
+            />
+
+            {/* ── Variable popup ── */}
+            {(activeVar || showVarList) && (urlVars.length > 0 || activeVar) && (
+              <div
+                onMouseDown={cancelBlur}
+                onFocus={cancelBlur}
+                className="absolute top-full left-0 mt-1 z-50 bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl min-w-[260px] max-w-[480px] overflow-hidden"
+              >
+                {/* Single variable preview */}
+                {activeVar && activeVarInfo && (
+                  <div className="px-3 py-2.5">
+                    {/* Value row */}
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs flex-1 truncate">
+                        {activeVarInfo.source !== 'none'
+                          ? <span className="text-gray-200">{activeVarInfo.value || <span className="italic text-gray-500">(empty string)</span>}</span>
+                          : <span className="italic text-gray-500">not set</span>
+                        }
+                      </span>
+                      {/* Interpolate icon */}
+                      <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </div>
+                    {/* Source badge + list toggle */}
+                    <div className="flex items-center justify-between mt-1.5 gap-2">
+                      <div>
+                        {activeVarInfo.source === 'override' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 font-medium">
+                            <span className="w-3.5 h-3.5 rounded-full bg-orange-500 inline-flex items-center justify-center text-[8px] text-white font-bold leading-none">O</span>
+                            Override
+                          </span>
+                        )}
+                        {activeVarInfo.source === 'env' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">
+                            <span className="w-3.5 h-3.5 rounded-full bg-blue-500 inline-flex items-center justify-center text-[8px] text-white font-bold leading-none">E</span>
+                            Environment
+                          </span>
+                        )}
+                        {activeVarInfo.source === 'temp' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-medium">
+                            <span className="w-3.5 h-3.5 rounded-full bg-purple-500 inline-flex items-center justify-center text-[8px] text-white font-bold leading-none">V</span>
+                            Script Variable
+                          </span>
+                        )}
+                        {activeVarInfo.source === 'none' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500 font-medium">
+                            <span className="w-3.5 h-3.5 rounded-full bg-yellow-500/40 inline-flex items-center justify-center text-[8px] text-white font-bold leading-none">?</span>
+                            Not set
+                          </span>
+                        )}
+                      </div>
+                      {urlVars.length > 0 && (
+                        <button
+                          onMouseDown={e => { e.preventDefault(); cancelBlur(); setShowVarList(v => !v); setActiveVar(null) }}
+                          className="text-[10px] text-orange-400 hover:text-orange-300 transition whitespace-nowrap"
+                        >
+                          Variables in request →
+                        </button>
+                      )}
+                    </div>
+                    {/* Inline override input */}
+                    <div className="mt-2 pt-2 border-t border-gray-700/50 flex items-center gap-1.5">
+                      <input
+                        value={varOverrides[activeVar] ?? ''}
+                        onChange={e => onSetVarOverride(activeVar, e.target.value)}
+                        onMouseDown={cancelBlur}
+                        placeholder="Set temporary value…"
+                        className="flex-1 bg-gray-800/60 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 font-mono min-w-0"
+                      />
+                      {varOverrides[activeVar] !== undefined && varOverrides[activeVar] !== '' && (
+                        <button
+                          onMouseDown={e => { e.preventDefault(); cancelBlur(); onSetVarOverride(activeVar, '') }}
+                          className="text-gray-600 hover:text-gray-300 transition shrink-0"
+                          title="Clear override"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* All variables list */}
+                {showVarList && urlVars.length > 0 && (
+                  <div className={activeVar ? 'border-t border-gray-700/60' : ''}>
+                    <div className="px-3 py-1.5 flex items-center justify-between bg-gray-800/40">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Variables in request</span>
+                      <button
+                        onMouseDown={e => { e.preventDefault(); cancelBlur(); setShowVarList(false) }}
+                        className="text-gray-600 hover:text-gray-400 transition"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    {urlVars.map(name => {
+                      const info = resolveVar(name, envVars, tempVars, varOverrides)
+                      return (
+                        <div key={name} className="px-3 py-2 hover:bg-gray-800/50 border-b border-gray-800/40 last:border-0">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="font-mono text-orange-400 text-xs shrink-0">{'{{' + name + '}}'}</span>
+                            {info.source === 'override' && <span className="text-[9px] px-1 py-0.5 rounded bg-orange-500/15 text-orange-400 shrink-0 ml-auto">OVERRIDE</span>}
+                            {info.source === 'env' && <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/15 text-blue-400 shrink-0 ml-auto">ENV</span>}
+                            {info.source === 'temp' && <span className="text-[9px] px-1 py-0.5 rounded bg-purple-500/15 text-purple-400 shrink-0 ml-auto">VAR</span>}
+                            {info.source === 'none' && <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-500/10 text-yellow-600 shrink-0 ml-auto">—</span>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <input
+                              value={varOverrides[name] ?? ''}
+                              onChange={e => onSetVarOverride(name, e.target.value)}
+                              onMouseDown={cancelBlur}
+                              placeholder={info.source !== 'none' && info.source !== 'override' ? (info.value || '(empty)') : 'Set temporary value…'}
+                              className="flex-1 bg-gray-800/70 border border-gray-700/60 rounded px-2 py-1 text-[11px] text-gray-200 placeholder-gray-600 focus:outline-none focus:border-orange-400 font-mono min-w-0"
+                            />
+                            {varOverrides[name] !== undefined && varOverrides[name] !== '' && (
+                              <button
+                                onMouseDown={e => { e.preventDefault(); cancelBlur(); onSetVarOverride(name, '') }}
+                                className="text-gray-600 hover:text-gray-300 transition shrink-0"
+                                title="Clear override"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <button onClick={sendRequest} disabled={isSending || !url.trim()}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-md text-sm transition shrink-0">
+            {isSending ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg> : 'Send'}
+          </button>
+        </div>
       </div>
 
       {/* Editor tab strip */}

@@ -34,6 +34,14 @@ export async function POST(req: NextRequest) {
   return withApiHandler(async () => {
     const session = await requireSession()
     const body = await req.json()
+    const colRepo = new MongoDBCollectionRepository()
+    const col = await colRepo.findById(body.collectionId)
+    if (!col) throw new NotFoundError('Collection')
+    const wsRepo = new MongoDBWorkspaceRepository()
+    const ws = await wsRepo.findById(col.workspaceId)
+    if (!ws) throw new NotFoundError('Workspace')
+    const isMember = ws.ownerId === session.user.id || ws.members.some(m => m.userId === session.user.id)
+    if (!isMember) throw new UnauthorizedError('Access denied')
     const repo = new MongoDBRequestRepository()
     const useCase = new CreateRequestUseCase(repo)
     const request = await useCase.execute({
@@ -50,9 +58,7 @@ export async function POST(req: NextRequest) {
       postRequestScript: body.postRequestScript,
       createdBy: session.user.id,
     })
-    const colRepo = new MongoDBCollectionRepository()
-    const col = await colRepo.findById(body.collectionId)
-    if (col) logActivity({ workspaceId: col.workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'created', resourceType: 'request', resourceName: request.name, details: `${request.method} ${request.url || '(no url)'}` })
+    logActivity({ workspaceId: col.workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'created', resourceType: 'request', resourceName: request.name, details: `${request.method} ${request.url || '(no url)'}` })
     return NextResponse.json({ request }, { status: 201 })
   })
 }

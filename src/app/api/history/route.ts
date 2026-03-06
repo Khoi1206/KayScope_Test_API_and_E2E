@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
     const workspaceId = req.nextUrl.searchParams.get('workspaceId')
     const requestId = req.nextUrl.searchParams.get('requestId')
     const limitStr = req.nextUrl.searchParams.get('limit')
+    const skipStr = req.nextUrl.searchParams.get('skip')
     const limit = limitStr ? Math.min(parseInt(limitStr, 10) || 50, 200) : 50
+    const skip = skipStr ? Math.max(parseInt(skipStr, 10) || 0, 0) : 0
 
     const repo = new MongoDBHistoryRepository()
 
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
     }
     if (workspaceId) {
       await checkWorkspaceMembership(workspaceId, session.user.id)
-      const entries = await repo.findByWorkspace(workspaceId, limit)
+      const entries = await repo.findByWorkspace(workspaceId, limit, skip)
       return NextResponse.json({ history: entries })
     }
 

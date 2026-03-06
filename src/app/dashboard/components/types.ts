@@ -45,6 +45,7 @@ export interface TabSnapshot {
   response: ExecResponse | null; responseTab: 'Pretty' | 'Headers' | 'Cookies' | 'Timing' | 'Raw'
   requestTiming: { dns: number; connect: number; tls: number; firstByte: number; download: number; total: number } | null
   sendError: string | null; isSending: boolean
+  varOverrides: Record<string, string>
 }
 export interface RequestTabMeta {
   id: string; label: string; method: HttpMethod; savedReqId: string | null; snapshot: TabSnapshot | null

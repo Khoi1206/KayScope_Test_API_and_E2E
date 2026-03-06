@@ -62,11 +62,12 @@ export class MongoDBHistoryRepository implements IHistoryRepository {
     return db.collection<HistoryDocument>('request_history')
   }
 
-  async findByWorkspace(workspaceId: string, limit = 50): Promise<RequestHistory[]> {
+  async findByWorkspace(workspaceId: string, limit = 50, skip = 0): Promise<RequestHistory[]> {
     const col = await this.collection()
     const docs = await col
       .find({ workspaceId: new ObjectId(workspaceId) })
       .sort({ createdAt: -1 })
+      .skip(skip)
       .limit(limit)
       .toArray()
     return docs.map(toEntity)

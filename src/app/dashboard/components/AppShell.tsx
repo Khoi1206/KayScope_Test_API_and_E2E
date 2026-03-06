@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo, useCallback } from 'react'
 
 import type { Workspace, SavedRequest } from './types'
 import { METHOD_COLOR } from './constants'
@@ -74,12 +74,19 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
      We break the cycle with a stable proxy function that delegates through a ref. */
   const setRequestsByColProxy = useRef<React.Dispatch<React.SetStateAction<Record<string, SavedRequest[]>>>>(() => {})
 
+  const stableSetRequestsByCol = useCallback(
+    (...args: Parameters<typeof setRequestsByColProxy.current>) => {
+      setRequestsByColProxy.current(...args)
+    },
+    []
+  )
+
   const editor = useRequestEditor({
     currentWs,
     environments,
     currentEnvId,
     setEnvironments,
-    setRequestsByCol: (...args) => setRequestsByColProxy.current(...args),
+    setRequestsByCol: stableSetRequestsByCol,
     sidebarSection,
     loadHistory,
   })
@@ -91,12 +98,23 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
     activeTab, setActiveTab,
     preRequestScript, setPreRequestScript, postRequestScript, setPostRequestScript,
     preScriptResult, postScriptResult,
+    tempVars,
     tabs, activeTabId, tabBarRef,
     response, responseTab, setResponseTab, isSending, sendError, requestTiming,
     isSaving, saveFlash, saveError, setSaveError, saveToColModal, setSaveToColModal,
     switchToTab, closeTab, newTab, openInTab, openHistoryInTab,
     handleRequestsRemoved, saveRequest, sendRequest,
+    varOverrides, setVarOverride,
   } = editor
+
+  /* Resolved environment variables — passed to RequestEditor for variable tooltip */
+  const resolvedEnvVars = useMemo(() => {
+    const vars: Record<string, string> = {}
+    environments.find(e => e.id === currentEnvId)?.variables
+      .filter(v => v.enabled && v.key)
+      .forEach(v => { vars[v.key] = v.value })
+    return vars
+  }, [environments, currentEnvId])
 
   /* ══════════════════════════════════════════════════════════════
      COLLECTION TREE + LIVE SYNC HOOKS
@@ -138,7 +156,10 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
      RENDER
      ───────────────────────────────────────────────────────────────────── */
 
-  const currentEnv = environments.find(e => e.id === currentEnvId)
+  const currentEnv = useMemo(
+    () => environments.find(e => e.id === currentEnvId) ?? null,
+    [environments, currentEnvId]
+  )
 
   return (
     <div className="flex flex-col h-screen bg-[#1a1a1a] text-gray-100 overflow-hidden">
@@ -299,6 +320,8 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
                 preRequestScript={preRequestScript} setPreRequestScript={setPreRequestScript}
                 postRequestScript={postRequestScript} setPostRequestScript={setPostRequestScript}
                 preScriptResult={preScriptResult} postScriptResult={postScriptResult}
+                envVars={resolvedEnvVars} tempVars={tempVars}
+                varOverrides={varOverrides} onSetVarOverride={setVarOverride}
               />
               <ResponsePanel
                 response={response}

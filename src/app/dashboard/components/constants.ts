@@ -26,6 +26,7 @@ export const mkBlankSnapshot = (): TabSnapshot => ({
   preRequestScript: '', postRequestScript: '', tempVars: {},
   preScriptResult: null, postScriptResult: null,
   response: null, responseTab: 'Pretty', requestTiming: null, sendError: null, isSending: false,
+  varOverrides: {},
 })
 
 /* ══════════════════════════════════════════════════════════════
@@ -81,12 +82,24 @@ export const TabFactory = {
         tempVars: {},
         preScriptResult: null, postScriptResult: null,
         response: null, responseTab: 'Pretty', requestTiming: null, sendError: null, isSending: false,
+        varOverrides: {},
       },
     }
   },
 
   /** Create a draft tab from a history entry */
   fromHistory(h: HistoryEntry): { meta: RequestTabMeta; snapshot: TabSnapshot } {
+    // Split the stored URL into base + query params so the params table is populated
+    // (execute/buildUrl strips inline query strings — params must live in the table)
+    let baseUrl = h.url
+    const historyParams: KV[] = []
+    try {
+      const parsed = new URL(h.url.startsWith('http') ? h.url : `https://${h.url}`)
+      baseUrl = parsed.origin + parsed.pathname
+      parsed.searchParams.forEach((value, key) => {
+        historyParams.push({ key, value, enabled: true, description: '' })
+      })
+    } catch { /* keep baseUrl = h.url, params empty */ }
     return {
       meta: {
         id: 'tab-' + crypto.randomUUID(),
@@ -97,14 +110,15 @@ export const TabFactory = {
       },
       snapshot: {
         activeReq: null, isDraft: true, draftColId: null, draftFolderId: null,
-        reqName: 'From History', method: h.method as HttpMethod, url: h.url,
-        params: [], headers: [...DEFAULT_HEADERS],
+        reqName: 'From History', method: h.method as HttpMethod, url: baseUrl,
+        params: historyParams, headers: [...DEFAULT_HEADERS],
         body: { ...EMPTY_BODY, formData: [] }, auth: { ...EMPTY_AUTH },
         activeTab: 'Params',
         preRequestScript: '', postRequestScript: '', tempVars: {},
         preScriptResult: null, postScriptResult: null,
         response: { status: h.status, statusText: h.statusText, headers: h.responseHeaders, body: h.responseBody, durationMs: h.durationMs, size: h.size },
         responseTab: 'Pretty', requestTiming: null, sendError: null, isSending: false,
+        varOverrides: {},
       },
     }
   },

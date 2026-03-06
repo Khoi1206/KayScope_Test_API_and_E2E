@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useRef, useEffect, type Dispatch, type SetStateAction, type RefObject } from 'react'
+import { memo, useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, type RefObject } from 'react'
 
 import type {
   Workspace, Collection, SavedRequest, FolderNode, FolderTreeResult,
@@ -78,6 +78,22 @@ export interface SidebarPanelProps {
   currentEnvName: string | undefined
 }
 
+/* ── Activity action colour map (module-level — never recreated) ── */
+const ACTION_COLORS: Record<string, string> = {
+  created: 'text-green-400', updated: 'text-blue-400', deleted: 'text-red-400',
+  invited: 'text-purple-400', removed: 'text-orange-400', executed: 'text-cyan-400',
+  imported: 'text-yellow-400', exported: 'text-yellow-400',
+}
+
+/* ── Sidebar navigation items (static — no props/state dependency) ── */
+const SIDEBAR_ITEMS = [
+  { id: 'collections' as const, title: 'Collections', label: 'Collection', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg> },
+  { id: 'environments' as const, title: 'Environments', label: 'Environment', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
+  { id: 'history' as const, title: 'History', label: 'History', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+  { id: 'activity' as const, title: 'Activity', label: 'Activity', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> },
+  { id: 'tests' as const, title: 'E2E Tests', label: 'Tests', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg> },
+] as const
+
 /* ══════════════════════════════════════════════════════════════
    SidebarPanel — left icon strip + sidebar content panels
    ══════════════════════════════════════════════════════════════ */
@@ -111,9 +127,9 @@ export const SidebarPanel = memo(function SidebarPanel({
   }, [])
 
   /* ── Tree helpers ── */
-  const toggleFolder = (key: string) => setExpandedFolders(prev => {
+  const toggleFolder = useCallback((key: string) => setExpandedFolders(prev => {
     const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next
-  })
+  }), [])
 
   const renderRequest = (req: SavedRequest) => (
     <div key={req.id} onClick={() => openInTab(req)}
@@ -161,20 +177,11 @@ export const SidebarPanel = memo(function SidebarPanel({
     )
   }
 
-  /* ── Sidebar icon definitions ── */
-  const sidebarItems = [
-    { id: 'collections' as const, title: 'Collections', label: 'Collection', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg> },
-    { id: 'environments' as const, title: 'Environments', label: 'Environment', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
-    { id: 'history' as const, title: 'History', label: 'History', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-    { id: 'activity' as const, title: 'Activity', label: 'Activity', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> },
-    { id: 'tests' as const, title: 'E2E Tests', label: 'Tests', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg> },
-  ] as const
-
   return (
     <>
       {/* ══ Left icon strip ══ */}
       <div className="w-16 flex flex-col items-center pt-3 pb-3 gap-1 bg-[#1c1c1c] border-r border-gray-800/80 shrink-0">
-        {sidebarItems.map(item => (
+        {SIDEBAR_ITEMS.map(item => (
           <button key={item.id} onClick={() => setSidebarSection(prev => prev === item.id ? null : item.id)} title={item.title}
             className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl gap-1 transition ${
               sidebarSection === item.id ? 'bg-gray-700/70 text-orange-400' : 'text-gray-600 hover:text-gray-300 hover:bg-gray-700/40'
@@ -367,12 +374,7 @@ export const SidebarPanel = memo(function SidebarPanel({
               {!loadingActivity && !currentWs && <p className="text-xs text-gray-600 px-4 py-3">Select a workspace first.</p>}
               {!loadingActivity && currentWs && activityLogs.length === 0 && <p className="text-xs text-gray-600 px-4 py-3">No activity yet.</p>}
               {activityLogs.map(log => {
-                const actionColors: Record<string, string> = {
-                  created: 'text-green-400', updated: 'text-blue-400', deleted: 'text-red-400',
-                  invited: 'text-purple-400', removed: 'text-orange-400', executed: 'text-cyan-400',
-                  imported: 'text-yellow-400', exported: 'text-yellow-400',
-                }
-                const color = actionColors[log.action] ?? 'text-gray-400'
+                const color = ACTION_COLORS[log.action] ?? 'text-gray-400'
                 return (
                   <div key={log.id} className="px-4 py-2.5 border-b border-gray-800/40 hover:bg-gray-800/30 transition">
                     <div className="flex items-start gap-2">

@@ -50,6 +50,8 @@ export function useEnvironments(currentWs: Workspace | null) {
     try {
       const { environments: envs } = await apiFetch<{ environments: Environment[] }>(`/api/environments?workspaceId=${currentWs.id}`)
       setEnvironments(envs)
+      // If the active env was deleted by a teammate, fall back to 'none'
+      setCurrentEnvId(prev => (prev === 'none' || envs.some(e => e.id === prev) ? prev : 'none'))
     } catch { /* ignore */ }
   }, [currentWs])
 
