@@ -6,6 +6,7 @@ import { CreateWorkspaceUseCase } from '@/modules/workspace/domain/usecases/crea
 import { GetWorkspacesUseCase } from '@/modules/workspace/domain/usecases/get-workspaces.usecase'
 import { ValidationError } from '@/lib/errors/ValidationError'
 import { logActivity } from '@/lib/activity/log-activity'
+import { createWorkspaceBodySchema } from '@/lib/schemas'
 
 export async function GET() {
   return withApiHandler(async () => {
@@ -20,14 +21,15 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return withApiHandler(async () => {
     const session = await requireSession()
-    const body = await req.json()
-    const name = (body.name as string | undefined)?.trim()
-    if (!name || name.length < 2) throw new ValidationError('Workspace name must be at least 2 characters')
+    const raw = await req.json()
+    const parsed = createWorkspaceBodySchema.safeParse(raw)
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message)
+    const { name, description } = parsed.data
     const repo = new MongoDBWorkspaceRepository()
     const useCase = new CreateWorkspaceUseCase(repo)
     const workspace = await useCase.execute({
       name,
-      description: body.description,
+      description,
       ownerId: session.user.id,
     })
     logActivity({ workspaceId: workspace.id, userId: session.user.id, userName: session.user.name ?? 'User', action: 'created', resourceType: 'workspace', resourceName: workspace.name })

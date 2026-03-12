@@ -9,6 +9,7 @@ import { GetRequestsUseCase } from '@/modules/request/domain/usecases/get-reques
 import { ValidationError, NotFoundError } from '@/lib/errors/ValidationError'
 import { UnauthorizedError } from '@/lib/errors/AuthError'
 import { logActivity } from '@/lib/activity/log-activity'
+import { createRequestBodySchema } from '@/lib/schemas'
 
 export async function GET(req: NextRequest) {
   return withApiHandler(async () => {
@@ -33,9 +34,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return withApiHandler(async () => {
     const session = await requireSession()
-    const body = await req.json()
+    const raw = await req.json()
+    const parsed = createRequestBodySchema.safeParse(raw)
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message)
+    const { collectionId, folderId, name, method, url, headers, params: queryParams, body: reqBody, auth, preRequestScript, postRequestScript } = parsed.data
     const colRepo = new MongoDBCollectionRepository()
-    const col = await colRepo.findById(body.collectionId)
+    const col = await colRepo.findById(collectionId)
     if (!col) throw new NotFoundError('Collection')
     const wsRepo = new MongoDBWorkspaceRepository()
     const ws = await wsRepo.findById(col.workspaceId)
@@ -45,17 +49,17 @@ export async function POST(req: NextRequest) {
     const repo = new MongoDBRequestRepository()
     const useCase = new CreateRequestUseCase(repo)
     const request = await useCase.execute({
-      collectionId: body.collectionId,
-      folderId: body.folderId,
-      name: body.name,
-      method: body.method ?? 'GET',
-      url: body.url ?? '',
-      headers: body.headers,
-      params: body.params,
-      body: body.body,
-      auth: body.auth,
-      preRequestScript: body.preRequestScript,
-      postRequestScript: body.postRequestScript,
+      collectionId,
+      folderId,
+      name,
+      method,
+      url,
+      headers,
+      params: queryParams,
+      body: reqBody,
+      auth,
+      preRequestScript,
+      postRequestScript,
       createdBy: session.user.id,
     })
     logActivity({ workspaceId: col.workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'created', resourceType: 'request', resourceName: request.name, details: `${request.method} ${request.url || '(no url)'}` })

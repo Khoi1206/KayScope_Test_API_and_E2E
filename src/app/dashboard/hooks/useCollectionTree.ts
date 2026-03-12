@@ -34,9 +34,11 @@ export function useCollectionTree(
 
   /* Guard: prevent duplicate collection fetches */
   const fetchingColsRef = useRef(new Set<string>())
-  /* Ref to read requestsByCol without re-creating callbacks */
+  /* Refs to read maps without re-creating callbacks */
   const requestsByColRef = useRef(requestsByCol)
   requestsByColRef.current = requestsByCol
+  const foldersByColRef = useRef(foldersByCol)
+  foldersByColRef.current = foldersByCol
   /* Keep callbacks in ref to avoid stale closures */
   const callbacksRef = useRef(callbacks)
   callbacksRef.current = callbacks
@@ -87,7 +89,7 @@ export function useCollectionTree(
 
   /* Load folders for a collection on-demand (used by SaveToCollectionModal) */
   const loadFoldersForCollection = useCallback(async (colId: string) => {
-    if (foldersByCol[colId] || fetchingColsRef.current.has(colId)) return
+    if (foldersByColRef.current[colId] || fetchingColsRef.current.has(colId)) return
     fetchingColsRef.current.add(colId)
     try {
       const [{ requests }, { folders }] = await Promise.all([
@@ -97,7 +99,7 @@ export function useCollectionTree(
       setRequestsByCol(prev => ({ ...prev, [colId]: requests }))
       setFoldersByCol(prev => ({ ...prev, [colId]: folders }))
     } finally { fetchingColsRef.current.delete(colId) }
-  }, [foldersByCol])
+  }, [])
 
   /* ── Create collection ── */
   const createCollection = useCallback(async () => {
@@ -133,7 +135,7 @@ export function useCollectionTree(
   const createFolder = useCallback(async (colId: string, name: string, parentFolderId?: string) => {
     try {
       // Ensure collection data is loaded
-      if (!requestsByCol[colId]) {
+      if (!requestsByColRef.current[colId]) {
         const [{ requests }, { folders }] = await Promise.all([
           apiFetch<{ requests: SavedRequest[] }>(`/api/requests?collectionId=${colId}`),
           apiFetch<{ folders: Folder[] }>(`/api/folders?collectionId=${colId}`),
@@ -149,7 +151,7 @@ export function useCollectionTree(
       setExpandedCols(prev => { const n = new Set(prev); n.add(colId); return n })
       setExpandedFolders(prev => { const n = new Set(prev); n.add(`${colId}::${folder.id}`); return n })
     } catch (e) { console.error(e) }
-  }, [requestsByCol])
+  }, [])
 
   /** Throws on failure — caller handles modal dismiss */
   const renameFolder = useCallback(async (colId: string, folderId: string, newName: string) => {
@@ -161,7 +163,7 @@ export function useCollectionTree(
 
   /* ── Delete folder (cascade handled server-side) ── */
   const deleteFolder = useCallback(async (colId: string, folderId: string) => {
-    const allFolders = foldersByCol[colId] ?? []
+    const allFolders = foldersByColRef.current[colId] ?? []
     const deletedFolderIds = new Set<string>()
     const collectDescendants = (id: string) => {
       deletedFolderIds.add(id)
@@ -170,14 +172,20 @@ export function useCollectionTree(
     collectDescendants(folderId)
 
     // Save previous state for rollback
-    const prevFolders = foldersByCol[colId] ?? []
-    const prevRequests = requestsByCol[colId] ?? []
+    const prevFolders = foldersByColRef.current[colId] ?? []
+    const prevRequests = requestsByColRef.current[colId] ?? []
 
     // Optimistic UI update
     const remainingRequests = prevRequests.filter(r => !r.folderId || !deletedFolderIds.has(r.folderId))
     const remainingIds = new Set(remainingRequests.map(r => r.id))
     setFoldersByCol(prev => ({ ...prev, [colId]: allFolders.filter(f => !deletedFolderIds.has(f.id)) }))
     setRequestsByCol(prev => ({ ...prev, [colId]: remainingRequests }))
+    // Clean up expanded state for deleted folder keys (folder IDs are unique ObjectIds, no rollback needed)
+    setExpandedFolders(prev => {
+      const next = new Set(prev)
+      deletedFolderIds.forEach(id => next.delete(`${colId}::${id}`))
+      return next
+    })
 
     // Fire DELETE — rollback on failure, demote tabs only on success
     try {
@@ -189,12 +197,12 @@ export function useCollectionTree(
       setFoldersByCol(prev => ({ ...prev, [colId]: prevFolders }))
       setRequestsByCol(prev => ({ ...prev, [colId]: prevRequests }))
     }
-  }, [foldersByCol, requestsByCol])
+  }, [])
 
   /* ── Create request immediately ── */
   const createRequestImmediately = useCallback(async (colId: string, folderId?: string) => {
     try {
-      if (!requestsByCol[colId]) {
+      if (!requestsByColRef.current[colId]) {
         const [{ requests }, { folders }] = await Promise.all([
           apiFetch<{ requests: SavedRequest[] }>(`/api/requests?collectionId=${colId}`),
           apiFetch<{ folders: Folder[] }>(`/api/folders?collectionId=${colId}`),
@@ -217,7 +225,7 @@ export function useCollectionTree(
       }
       callbacksRef.current.onOpenInTab(request)
     } catch (e) { console.error(e) }
-  }, [requestsByCol])
+  }, [])
 
   /** Throws on failure — caller handles modal dismiss */
   const deleteRequest = useCallback(async (req: SavedRequest) => {

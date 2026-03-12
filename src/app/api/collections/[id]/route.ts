@@ -4,9 +4,10 @@ import { withApiHandler } from '@/lib/api/api-handler'
 import { MongoDBCollectionRepository } from '@/modules/collection/infrastructure/repositories/mongodb-collection.repository'
 import { MongoDBRequestRepository } from '@/modules/request/infrastructure/repositories/mongodb-request.repository'
 import { MongoDBFolderRepository } from '@/modules/folder/infrastructure/repositories/mongodb-folder.repository'
-import { NotFoundError } from '@/lib/errors/ValidationError'
+import { NotFoundError, ValidationError } from '@/lib/errors/ValidationError'
 import { UnauthorizedError } from '@/lib/errors/AuthError'
 import { logActivity } from '@/lib/activity/log-activity'
+import { updateCollectionBodySchema } from '@/lib/schemas'
 
 interface Params { params: { id: string } }
 
@@ -34,8 +35,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
       if (!ws || ws.ownerId !== session.user.id) throw new UnauthorizedError('Forbidden')
     }
     const body = await req.json()
-    const updated = await repo.update(params.id, { name: body.name, description: body.description })
-    logActivity({ workspaceId: col.workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'updated', resourceType: 'collection', resourceName: body.name ?? col.name })
+    const parsed = updateCollectionBodySchema.safeParse(body)
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message)
+    const updated = await repo.update(params.id, parsed.data)
+    logActivity({ workspaceId: col.workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'updated', resourceType: 'collection', resourceName: parsed.data.name ?? col.name })
     return NextResponse.json({ collection: updated })
   })
 }

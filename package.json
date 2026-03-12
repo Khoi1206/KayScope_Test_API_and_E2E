@@ -12,14 +12,17 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "bcryptjs": "^2.4.3",
     "blockly": "^12.4.1",
+    "dayjs": "^1.11.19",
     "mongodb": "^6.21.0",
     "next": "14.2.35",
     "next-auth": "^4.24.13",
     "react": "^18",
     "react-dom": "^18",
-    "undici": "^7.22.0"
+    "undici": "^7.22.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

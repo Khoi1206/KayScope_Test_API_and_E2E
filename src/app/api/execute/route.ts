@@ -6,6 +6,7 @@ import type { ExecuteRequestDTO, ExecuteResponse, KeyValuePair } from '@/modules
 import { MongoDBHistoryRepository } from '@/modules/history/infrastructure/repositories/mongodb-history.repository'
 import { resolveAuthHeaders } from '@/lib/auth/auth-strategy'
 import { Agent, fetch as undiciFetch, FormData as UndiciFormData } from 'undici'
+import { executeBodySchema } from '@/lib/schemas'
 
 // Reusable agent that skips TLS certificate verification
 // (same behaviour as Postman / browser dev-tools)
@@ -55,9 +56,10 @@ export async function POST(req: NextRequest) {
   return withApiHandler(async () => {
     const session = await requireSession()
 
-    const dto: ExecuteRequestDTO & { requestId?: string; workspaceId?: string } = await req.json()
-    if (!dto.url) throw new ValidationError('URL is required')
-    if (!dto.method) throw new ValidationError('Method is required')
+    const raw = await req.json()
+    const bodyParsed = executeBodySchema.safeParse(raw)
+    if (!bodyParsed.success) throw new ValidationError(bodyParsed.error.issues[0].message)
+    const dto = bodyParsed.data as ExecuteRequestDTO & { requestId?: string; workspaceId?: string }
 
     const envVars = dto.environmentVariables ?? {}
     const params = dto.params ?? []

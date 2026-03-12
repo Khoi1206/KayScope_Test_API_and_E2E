@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useRef, useMemo } from 'react'
+import { memo, useState, useRef, useMemo, useEffect } from 'react'
 import type {
   HttpMethod, KV, ReqBody, ReqAuth,
   RawBodyType, ScriptResult,
@@ -9,6 +9,7 @@ import {
   HTTP_METHODS, METHOD_COLOR, EMPTY_KV,
 } from './constants'
 import { KVEditor } from './KVEditor'
+import { ScriptEditor } from './ScriptEditor'
 
 /* ══════════════════════════════════════════════════════════════
    Variable tooltip helpers
@@ -113,6 +114,9 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
   const [activeVar, setActiveVar] = useState<string | null>(null)
   const [showVarList, setShowVarList] = useState(false)
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /* Cleanup any pending blur timer on unmount */
+  useEffect(() => () => { if (blurTimerRef.current) clearTimeout(blurTimerRef.current) }, [])
 
   const urlVars = useMemo(() => extractVars(url), [url])
   const activeVarInfo = useMemo(
@@ -407,15 +411,9 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
                 ? 'Runs before the request is sent. Use pm.environment.set() and pm.variables.set() to inject dynamic values.'
                 : 'Runs after the response. Use pm.response.json(), pm.test(), and pm.environment.set() to extract and assert values.'}
             </p>
-            <textarea
+            <ScriptEditor
               value={activeTab === 'Pre-request' ? preRequestScript : postRequestScript}
-              onChange={e => (activeTab === 'Pre-request' ? setPreRequestScript : setPostRequestScript)(e.target.value)}
-              placeholder={activeTab === 'Pre-request'
-                ? '// Pre-request script\npm.environment.set("authToken", "my-token");\npm.variables.set("timestamp", Date.now().toString());'
-                : '// Post-request script\nconst data = pm.response.json();\npm.environment.set("token", data.token);\npm.test("Status is 200", () => {\n  pm.expect(pm.response.code).to.equal(200);\n});'}
-              rows={10}
-              spellCheck={false}
-              className="w-full bg-gray-900 border border-gray-700 rounded-md p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-y"
+              onChange={activeTab === 'Pre-request' ? setPreRequestScript : setPostRequestScript}
             />
             {(() => {
               const r = activeTab === 'Pre-request' ? preScriptResult : postScriptResult

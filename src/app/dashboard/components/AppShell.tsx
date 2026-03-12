@@ -53,6 +53,7 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
     loadingHistory,
     activityLogs, setActivityLogs,
     loadingActivity,
+    dbActivityCount,
     loadHistory, loadActivity,
     loadMoreHistory, loadMoreActivity,
   } = useHistoryActivity(currentWs, sidebarSection)
@@ -107,14 +108,20 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
     varOverrides, setVarOverride,
   } = editor
 
+  /* Current environment object — shared by resolvedEnvVars and the render below */
+  const currentEnv = useMemo(
+    () => environments.find(e => e.id === currentEnvId) ?? null,
+    [environments, currentEnvId]
+  )
+
   /* Resolved environment variables — passed to RequestEditor for variable tooltip */
   const resolvedEnvVars = useMemo(() => {
     const vars: Record<string, string> = {}
-    environments.find(e => e.id === currentEnvId)?.variables
+    currentEnv?.variables
       .filter(v => v.enabled && v.key)
       .forEach(v => { vars[v.key] = v.value })
     return vars
-  }, [environments, currentEnvId])
+  }, [currentEnv])
 
   /* ══════════════════════════════════════════════════════════════
      COLLECTION TREE + LIVE SYNC HOOKS
@@ -122,7 +129,7 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
 
   const {
     collections,
-    requestsByCol, setRequestsByCol,
+    setRequestsByCol,
     foldersByCol,
     expandedCols, expandedFolders, setExpandedFolders,
     loadingCols,
@@ -155,11 +162,6 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
   /* ─────────────────────────────────────────────────────────────────────
      RENDER
      ───────────────────────────────────────────────────────────────────── */
-
-  const currentEnv = useMemo(
-    () => environments.find(e => e.id === currentEnvId) ?? null,
-    [environments, currentEnvId]
-  )
 
   return (
     <div className="flex flex-col h-screen bg-[#1a1a1a] text-gray-100 overflow-hidden">
@@ -228,6 +230,7 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
           openHistoryInTab={openHistoryInTab} loadMoreHistory={loadMoreHistory}
           activityLogs={activityLogs} loadingActivity={loadingActivity}
           loadActivity={loadActivity} loadMoreActivity={loadMoreActivity}
+          dbActivityCount={dbActivityCount}
           setConfirmModal={setConfirmModal} setRenameModal={setRenameModal}
           currentEnvName={currentEnv?.name}
         />

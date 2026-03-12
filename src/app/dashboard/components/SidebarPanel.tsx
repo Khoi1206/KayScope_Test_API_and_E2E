@@ -69,6 +69,8 @@ export interface SidebarPanelProps {
   loadingActivity: boolean
   loadActivity: () => void
   loadMoreActivity: () => void
+  /** Count of activity entries fetched from the server (excludes SSE-pushed items) */
+  dbActivityCount: number
 
   /* Modal openers */
   setConfirmModal: Dispatch<SetStateAction<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>>
@@ -109,7 +111,7 @@ export const SidebarPanel = memo(function SidebarPanel({
   openInTab, activeReq, isDraft,
   environments, currentEnvId, setCurrentEnvId, setEnvEditorTarget, deleteEnvironment,
   history, loadingHistory, openHistoryInTab, loadMoreHistory,
-  activityLogs, loadingActivity, loadActivity, loadMoreActivity,
+  activityLogs, loadingActivity, loadActivity, loadMoreActivity, dbActivityCount,
   setConfirmModal, setRenameModal,
   currentEnvName,
 }: SidebarPanelProps) {
@@ -129,7 +131,7 @@ export const SidebarPanel = memo(function SidebarPanel({
   /* ── Tree helpers ── */
   const toggleFolder = useCallback((key: string) => setExpandedFolders(prev => {
     const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next
-  }), [])
+  }), [setExpandedFolders])
 
   const renderRequest = (req: SavedRequest) => (
     <div key={req.id} onClick={() => openInTab(req)}
@@ -395,7 +397,7 @@ export const SidebarPanel = memo(function SidebarPanel({
                   </div>
                 )
               })}
-              {!loadingActivity && activityLogs.length > 0 && activityLogs.length % 50 === 0 && (
+              {!loadingActivity && activityLogs.length > 0 && dbActivityCount % 50 === 0 && (
                 <button
                   onClick={loadMoreActivity}
                   className="w-full text-xs text-orange-400 hover:text-orange-300 py-3 hover:bg-gray-800/40 transition"

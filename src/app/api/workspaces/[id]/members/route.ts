@@ -8,6 +8,7 @@ import { MongoDBWorkspaceRepository } from '@/modules/workspace/infrastructure/r
 import { MongoDBUserRepository } from '@/modules/auth/infrastructure/repositories/mongodb-user.repository'
 import { logActivity } from '@/lib/activity/log-activity'
 import type { WorkspaceRole } from '@/modules/workspace/domain/entities/workspace.entity'
+import { inviteMemberBodySchema } from '@/lib/schemas'
 
 interface Params { params: { id: string } }
 
@@ -65,11 +66,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!ws) throw new NotFoundError('Workspace')
     if (ws.ownerId !== session.user.id) throw new UnauthorizedError('Only the owner can invite members')
 
-    const body = await req.json()
-    const email = (body.email as string)?.toLowerCase().trim()
-    const role: WorkspaceRole = body.role ?? 'editor'
-    if (!email) throw new ValidationError('email is required')
-    if (!['editor', 'viewer'].includes(role)) throw new ValidationError('role must be editor or viewer')
+    const raw = await req.json()
+    const bodyParsed = inviteMemberBodySchema.safeParse(raw)
+    if (!bodyParsed.success) throw new ValidationError(bodyParsed.error.issues[0].message)
+    const email = bodyParsed.data.email.toLowerCase()
+    const role: WorkspaceRole = bodyParsed.data.role
 
     const userRepo = new MongoDBUserRepository()
     const invitee = await userRepo.findByEmail(email)

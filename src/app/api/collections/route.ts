@@ -8,6 +8,7 @@ import { GetCollectionsUseCase } from '@/modules/collection/domain/usecases/get-
 import { ValidationError, NotFoundError } from '@/lib/errors/ValidationError'
 import { UnauthorizedError } from '@/lib/errors/AuthError'
 import { logActivity } from '@/lib/activity/log-activity'
+import { createCollectionBodySchema } from '@/lib/schemas'
 
 export async function GET(req: NextRequest) {
   return withApiHandler(async () => {
@@ -29,21 +30,24 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return withApiHandler(async () => {
     const session = await requireSession()
-    const body = await req.json()
+    const raw = await req.json()
+    const parsed = createCollectionBodySchema.safeParse(raw)
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message)
+    const { workspaceId, name, description } = parsed.data
     const wsRepo = new MongoDBWorkspaceRepository()
-    const ws = await wsRepo.findById(body.workspaceId)
+    const ws = await wsRepo.findById(workspaceId)
     if (!ws) throw new NotFoundError('Workspace')
     const isMember = ws.ownerId === session.user.id || ws.members.some(m => m.userId === session.user.id)
     if (!isMember) throw new UnauthorizedError('Access denied')
     const repo = new MongoDBCollectionRepository()
     const useCase = new CreateCollectionUseCase(repo)
     const collection = await useCase.execute({
-      workspaceId: body.workspaceId,
-      name: body.name,
-      description: body.description,
+      workspaceId,
+      name,
+      description,
       createdBy: session.user.id,
     })
-    logActivity({ workspaceId: body.workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'created', resourceType: 'collection', resourceName: collection.name })
+    logActivity({ workspaceId, userId: session.user.id, userName: session.user.name ?? 'User', action: 'created', resourceType: 'collection', resourceName: collection.name })
     return NextResponse.json({ collection }, { status: 201 })
   })
 }

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth/session'
 import { withApiHandler } from '@/lib/api/api-handler'
 import { MongoDBWorkspaceRepository } from '@/modules/workspace/infrastructure/repositories/mongodb-workspace.repository'
-import { NotFoundError } from '@/lib/errors/ValidationError'
+import { NotFoundError, ValidationError } from '@/lib/errors/ValidationError'
 import { UnauthorizedError } from '@/lib/errors/AuthError'
 import { logActivity } from '@/lib/activity/log-activity'
+import { updateWorkspaceBodySchema } from '@/lib/schemas'
 
 interface Params { params: { id: string } }
 
@@ -28,9 +29,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const ws = await repo.findById(params.id)
     if (!ws) throw new NotFoundError('Workspace')
     if (ws.ownerId !== session.user.id) throw new UnauthorizedError('Only the owner can update this workspace')
-    const body = await req.json()
-    const updated = await repo.update(params.id, { name: body.name, description: body.description })
-    logActivity({ workspaceId: params.id, userId: session.user.id, userName: session.user.name ?? 'User', action: 'updated', resourceType: 'workspace', resourceName: body.name ?? ws.name })
+    const raw = await req.json()
+    const parsed = updateWorkspaceBodySchema.safeParse(raw)
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0].message)
+    const updated = await repo.update(params.id, parsed.data)
+    logActivity({ workspaceId: params.id, userId: session.user.id, userName: session.user.name ?? 'User', action: 'updated', resourceType: 'workspace', resourceName: parsed.data.name ?? ws.name })
     return NextResponse.json({ workspace: updated })
   })
 }

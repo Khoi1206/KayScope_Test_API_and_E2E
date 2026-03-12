@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { MongoDBUserRepository } from '@/modules/auth/infrastructure/repositories/mongodb-user.repository'
 import { RegisterUseCase } from '@/modules/auth/domain/usecases/register.usecase'
 import { AppError } from '@/lib/errors'
+import { registerBodySchema } from '@/lib/schemas'
 
 /**
  * POST /api/auth/register
@@ -9,8 +10,15 @@ import { AppError } from '@/lib/errors'
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, email, password } = body
+    const raw = await request.json()
+    const parsed = registerBodySchema.safeParse(raw)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, message: parsed.error.issues[0].message },
+        { status: 400 }
+      )
+    }
+    const { name, email, password } = parsed.data
 
     // Initialize dependencies (manual DI)
     const userRepository = new MongoDBUserRepository()
