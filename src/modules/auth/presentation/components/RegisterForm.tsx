@@ -4,12 +4,14 @@ import { useEffect } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { registerAction, type ActionState } from '../actions/auth.actions'
 
 const initialState: ActionState = { success: false }
 
 function SubmitButton() {
   const { pending } = useFormStatus()
+  const t = useTranslations('register')
   return (
     <button
       type="submit"
@@ -22,9 +24,9 @@ function SubmitButton() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Creating account...
+          {t('submitting')}
         </span>
-      ) : 'Create account'}
+      ) : t('submit')}
     </button>
   )
 }
@@ -44,6 +46,7 @@ function FieldError({ message }: { message?: string }) {
 export function RegisterForm() {
   const [state, formAction] = useFormState(registerAction, initialState)
   const router = useRouter()
+  const t = useTranslations()
 
   useEffect(() => {
     if (state.success) {
@@ -79,19 +82,19 @@ export function RegisterForm() {
           <div>
             <h2 className="text-4xl font-extrabold text-white leading-tight mb-4">
               Your team&apos;s API<br />
-              <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">command center.</span>
+              <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">{t('register.heroHighlight')}</span>
             </h2>
             <p className="text-gray-400 text-base leading-relaxed max-w-sm">
-              Get started for free. Create workspaces, invite your team, and collaborate on API testing.
+              {t('register.heroDesc')}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { value: 'Free', label: 'to get started', icon: '\u2728' },
-              { value: 'Real', label: 'HTTP execution', icon: '\u26A1' },
-              { value: '{{vars}}', label: 'Environment support', icon: '\uD83C\uDF0D' },
-              { value: 'Team', label: 'Collaboration', icon: '\uD83D\uDC65' },
+              { value: t('register.features.free.value'), label: t('register.features.free.label'), icon: '\u2728' },
+              { value: t('register.features.real.value'), label: t('register.features.real.label'), icon: '\u26A1' },
+              { value: t('register.features.vars.value'), label: t('register.features.vars.label'), icon: '\uD83C\uDF0D' },
+              { value: t('register.features.team.value'), label: t('register.features.team.label'), icon: '\uD83D\uDC65' },
             ].map((s) => (
               <div key={s.label} className="bg-white/[0.04] backdrop-blur-sm rounded-xl p-4 border border-white/[0.06] hover:border-orange-500/20 transition-colors">
                 <div className="flex items-center gap-2 mb-1">
@@ -104,7 +107,7 @@ export function RegisterForm() {
           </div>
         </div>
 
-        <p className="text-gray-600 text-xs">&copy; 2026 KayScope. All rights reserved.</p>
+        <p className="text-gray-600 text-xs">{t('common.copyright')}</p>
       </div>
 
       {/* Right form panel */}
@@ -122,8 +125,8 @@ export function RegisterForm() {
             </div>
 
             <div className="mb-7">
-              <h1 className="text-2xl font-bold text-white mb-1">Create your account</h1>
-              <p className="text-gray-500 text-sm">Start testing APIs with your team today</p>
+              <h1 className="text-2xl font-bold text-white mb-1">{t('register.title')}</h1>
+              <p className="text-gray-500 text-sm">{t('register.subtitle')}</p>
             </div>
 
             {/* Success banner */}
@@ -132,7 +135,7 @@ export function RegisterForm() {
                 <svg className="w-4 h-4 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <p className="text-green-400 text-sm">{state.message ?? 'Account created! Redirecting...'}</p>
+                <p className="text-green-400 text-sm">{state.message ?? t('register.success')}</p>
               </div>
             )}
 
@@ -150,7 +153,7 @@ export function RegisterForm() {
               {/* Full name */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
-                  Full name
+                  {t('register.nameLabel')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -160,7 +163,7 @@ export function RegisterForm() {
                   </div>
                   <input
                     id="name" name="name" type="text" autoComplete="name" required
-                    placeholder="John Doe"
+                    placeholder={t('register.namePlaceholder')}
                     className={inputClass(!!state.fields?.name)}
                   />
                 </div>
@@ -170,7 +173,7 @@ export function RegisterForm() {
               {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                  Email address
+                  {t('common.emailLabel')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -180,7 +183,7 @@ export function RegisterForm() {
                   </div>
                   <input
                     id="email" name="email" type="email" autoComplete="email" required
-                    placeholder="you@company.com"
+                    placeholder={t('common.emailPlaceholder')}
                     className={inputClass(!!state.fields?.email)}
                   />
                 </div>
@@ -190,7 +193,7 @@ export function RegisterForm() {
               {/* Password */}
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                  Password
+                  {t('common.passwordLabel')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -200,7 +203,7 @@ export function RegisterForm() {
                   </div>
                   <input
                     id="password" name="password" type="password" autoComplete="new-password" required
-                    placeholder="At least 8 characters"
+                    placeholder={t('register.passwordPlaceholder')}
                     className={inputClass(!!state.fields?.password)}
                   />
                 </div>
@@ -210,7 +213,7 @@ export function RegisterForm() {
               {/* Confirm Password */}
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
-                  Confirm password
+                  {t('register.confirmPasswordLabel')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -220,7 +223,7 @@ export function RegisterForm() {
                   </div>
                   <input
                     id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required
-                    placeholder="Re-enter your password"
+                    placeholder={t('register.confirmPasswordPlaceholder')}
                     className={inputClass(!!state.fields?.confirmPassword)}
                   />
                 </div>
@@ -237,14 +240,14 @@ export function RegisterForm() {
             </div>
 
             <p className="text-center text-sm text-gray-500">
-              Already have an account?{' '}
+              {t('register.hasAccount')}{' '}
               <Link href="/login" className="text-orange-400 hover:text-orange-300 font-medium transition-colors">
-                Sign in
+                {t('register.signIn')}
               </Link>
             </p>
           </div>
 
-          <p className="text-center text-xs text-gray-700 mt-6 lg:hidden">&copy; 2026 KayScope</p>
+          <p className="text-center text-xs text-gray-700 mt-6 lg:hidden">{t('common.copyright')}</p>
         </div>
       </div>
     </div>

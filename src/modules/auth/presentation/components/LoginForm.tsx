@@ -4,12 +4,14 @@ import { useState, useTransition } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+  const t = useTranslations()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -22,10 +24,10 @@ export function LoginForm() {
 
     const errors: Record<string, string> = {}
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Invalid email address'
+      errors.email = t('common.invalidEmail')
     }
     if (!password) {
-      errors.password = 'Please enter your password'
+      errors.password = t('login.passwordRequired')
     }
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors)
@@ -40,7 +42,7 @@ export function LoginForm() {
       })
 
       if (result?.error) {
-        setError('Invalid email or password')
+        setError(t('login.invalidCredentials'))
       } else if (result?.ok) {
         router.push('/dashboard')
         router.refresh()
@@ -70,19 +72,19 @@ export function LoginForm() {
           <div>
             <h2 className="text-4xl font-extrabold text-white leading-tight mb-4">
               Build, test &<br />
-              <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">ship APIs faster.</span>
+              <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">{t('login.heroHighlight')}</span>
             </h2>
             <p className="text-gray-400 text-base leading-relaxed max-w-sm">
-              Collaborate with your team on API collections, manage environments, and execute real HTTP requests.
+              {t('login.heroDesc')}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { icon: '\u26A1', title: 'HTTP Execution', desc: 'Real request engine' },
-              { icon: '\uD83D\uDCC1', title: 'Collections', desc: 'Organized structure' },
-              { icon: '\uD83C\uDF0D', title: 'Environments', desc: 'Dev / Staging / Prod' },
-              { icon: '\uD83D\uDC65', title: 'Workspaces', desc: 'Team collaboration' },
+              { icon: '\u26A1', title: t('login.features.http.title'), desc: t('login.features.http.desc') },
+              { icon: '\uD83D\uDCC1', title: t('login.features.collections.title'), desc: t('login.features.collections.desc') },
+              { icon: '\uD83C\uDF0D', title: t('login.features.environments.title'), desc: t('login.features.environments.desc') },
+              { icon: '\uD83D\uDC65', title: t('login.features.workspaces.title'), desc: t('login.features.workspaces.desc') },
             ].map((f) => (
               <div key={f.title} className="bg-white/[0.04] backdrop-blur-sm rounded-xl p-4 border border-white/[0.06] hover:border-orange-500/20 transition-colors">
                 <span className="text-xl mb-2 block">{f.icon}</span>
@@ -93,7 +95,7 @@ export function LoginForm() {
           </div>
         </div>
 
-        <p className="text-gray-600 text-xs">&copy; 2026 KayScope. All rights reserved.</p>
+        <p className="text-gray-600 text-xs">{t('common.copyright')}</p>
       </div>
 
       {/* Right form panel */}
@@ -111,8 +113,8 @@ export function LoginForm() {
             </div>
 
             <div className="mb-7">
-              <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
-              <p className="text-gray-500 text-sm">Sign in to your account to continue</p>
+              <h1 className="text-2xl font-bold text-white mb-1">{t('login.title')}</h1>
+              <p className="text-gray-500 text-sm">{t('login.subtitle')}</p>
             </div>
 
             {error && (
@@ -127,7 +129,7 @@ export function LoginForm() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                  Email address
+                  {t('common.emailLabel')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -141,7 +143,7 @@ export function LoginForm() {
                     type="email"
                     autoComplete="email"
                     required
-                    placeholder="you@company.com"
+                    placeholder={t('common.emailPlaceholder')}
                     className={`w-full pl-10 pr-4 py-3 bg-white/[0.04] border rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-orange-500/40 focus:bg-white/[0.06] transition-all ${
                       fieldErrors.email ? 'border-red-500/50' : 'border-white/[0.08] hover:border-white/[0.15]'
                     }`}
@@ -157,7 +159,7 @@ export function LoginForm() {
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                  Password
+                  {t('common.passwordLabel')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -196,9 +198,9 @@ export function LoginForm() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Signing in...
+                    {t('login.submitting')}
                   </span>
-                ) : 'Sign in'}
+                ) : t('login.submit')}
               </button>
             </form>
 
@@ -209,14 +211,14 @@ export function LoginForm() {
             </div>
 
             <p className="text-center text-sm text-gray-500">
-              Don&apos;t have an account?{' '}
+              {t('login.noAccount')}{' '}
               <Link href="/register" className="text-orange-400 hover:text-orange-300 font-medium transition-colors">
-                Create one free
+                {t('login.createAccount')}
               </Link>
             </p>
           </div>
 
-          <p className="text-center text-xs text-gray-700 mt-6 lg:hidden">&copy; 2026 KayScope</p>
+          <p className="text-center text-xs text-gray-700 mt-6 lg:hidden">{t('common.copyright')}</p>
         </div>
       </div>
     </div>

@@ -1,0 +1,75 @@
+{
+  "common": {
+    "add": "Thêm",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "delete": "Xóa",
+    "rename": "Đổi tên",
+    "members": "Thành viên",
+    "emailLabel": "Địa chỉ email",
+    "emailPlaceholder": "ban@congty.com",
+    "passwordLabel": "Mật khẩu",
+    "invalidEmail": "Địa chỉ email không hợp lệ",
+    "copyright": "© 2026 KayScope. Bảo lưu mọi quyền."
+  },
+  "nav": {
+    "importTooltip": "Nhập bộ sưu tập (Postman / KayScope JSON)",
+    "live": "Trực tuyến",
+    "offline": "Ngoại tuyến",
+    "liveSyncActive": "Đồng bộ trực tiếp đang hoạt động",
+    "syncDisconnected": "Đồng bộ bị ngắt — đang kết nối lại…",
+    "noEnvironment": "Không có môi trường",
+    "signOut": "Đăng xuất",
+    "language": "Ngôn ngữ"
+  },
+  "workspaces": {
+    "title": "Không gian làm việc",
+    "loading": "Đang tải…",
+    "new": "Không gian làm việc mới",
+    "namePlaceholder": "Tối thiểu 2 ký tự",
+    "deleteConfirmTitle": "Xóa không gian làm việc",
+    "deleteConfirmMessage": "Xóa \"{name}\" cùng toàn bộ bộ sưu tập, yêu cầu và môi trường?"
+  },
+  "login": {
+    "title": "Chào mừng trở lại",
+    "subtitle": "Đăng nhập vào tài khoản của bạn để tiếp tục",
+    "invalidCredentials": "Email hoặc mật khẩu không đúng",
+    "passwordRequired": "Vui lòng nhập mật khẩu của bạn",
+    "submit": "Đăng nhập",
+    "submitting": "Đang đăng nhập…",
+    "noAccount": "Chưa có tài khoản?",
+    "createAccount": "Đăng ký ngay",
+    "heroTitle": "Xây dựng, kiểm thử &\ngửi API nhanh hơn.",
+    "heroHighlight": "gửi API nhanh hơn.",
+    "heroDesc": "Cộng tác với nhóm của bạn trên các bộ sưu tập API, quản lý môi trường và gửi các yêu cầu HTTP thực.",
+    "features": {
+      "http": { "title": "Thực thi HTTP", "desc": "Engine yêu cầu thực" },
+      "collections": { "title": "Bộ sưu tập", "desc": "Cấu trúc gọn gàng" },
+      "environments": { "title": "Môi trường", "desc": "Dev / Staging / Prod" },
+      "workspaces": { "title": "Không gian làm việc", "desc": "Cộng tác nhóm" }
+    }
+  },
+  "register": {
+    "title": "Tạo tài khoản của bạn",
+    "subtitle": "Bắt đầu kiểm thử API cùng nhóm ngay hôm nay",
+    "success": "Tạo tài khoản thành công! Đang chuyển hướng…",
+    "nameLabel": "Họ và tên",
+    "namePlaceholder": "Nguyễn Văn A",
+    "passwordPlaceholder": "Ít nhất 8 ký tự",
+    "confirmPasswordLabel": "Xác nhận mật khẩu",
+    "confirmPasswordPlaceholder": "Nhập lại mật khẩu của bạn",
+    "submit": "Tạo tài khoản",
+    "submitting": "Đang tạo tài khoản…",
+    "hasAccount": "Đã có tài khoản?",
+    "signIn": "Đăng nhập",
+    "heroTitle": "Trung tâm kiểm soát API\ncủa nhóm bạn.",
+    "heroHighlight": "của nhóm bạn.",
+    "heroDesc": "Bắt đầu miễn phí. Tạo không gian làm việc, mời nhóm của bạn và cùng cộng tác kiểm thử API.",
+    "features": {
+      "free": { "value": "Miễn phí", "label": "để bắt đầu" },
+      "real": { "value": "Thực", "label": "Thực thi HTTP" },
+      "vars": { "value": "{{vars}}", "label": "Hỗ trợ môi trường" },
+      "team": { "value": "Nhóm", "label": "Cộng tác" }
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
+import { requireSession } from '@/lib/auth/session'
 import type { RunResult, TestResult, RunSummary } from '@/app/test-builder/types'
 
 const execAsync = promisify(exec)
@@ -107,6 +108,12 @@ function fallbackResult(rawOutput: string, generatedCode: string): RunResult {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  try {
+    await requireSession()
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   let code: string
   try {
     const body = await req.json()

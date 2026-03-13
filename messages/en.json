@@ -1,0 +1,75 @@
+{
+  "common": {
+    "add": "Add",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "rename": "Rename",
+    "members": "Members",
+    "emailLabel": "Email address",
+    "emailPlaceholder": "you@company.com",
+    "passwordLabel": "Password",
+    "invalidEmail": "Invalid email address",
+    "copyright": "© 2026 KayScope. All rights reserved."
+  },
+  "nav": {
+    "importTooltip": "Import collection (Postman / KayScope JSON)",
+    "live": "Live",
+    "offline": "Offline",
+    "liveSyncActive": "Live sync active",
+    "syncDisconnected": "Sync disconnected — reconnecting…",
+    "noEnvironment": "No Environment",
+    "signOut": "Sign out",
+    "language": "Language"
+  },
+  "workspaces": {
+    "title": "Workspaces",
+    "loading": "Loading…",
+    "new": "New Workspace",
+    "namePlaceholder": "Min. 2 characters",
+    "deleteConfirmTitle": "Delete Workspace",
+    "deleteConfirmMessage": "Delete \"{name}\" and all its collections, requests, and environments?"
+  },
+  "login": {
+    "title": "Welcome back",
+    "subtitle": "Sign in to your account to continue",
+    "invalidCredentials": "Invalid email or password",
+    "passwordRequired": "Please enter your password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "noAccount": "Don't have an account?",
+    "createAccount": "Create one",
+    "heroTitle": "Build, test &\nship APIs faster.",
+    "heroHighlight": "ship APIs faster.",
+    "heroDesc": "Collaborate with your team on API collections, manage environments, and execute real HTTP requests.",
+    "features": {
+      "http": { "title": "HTTP Execution", "desc": "Real request engine" },
+      "collections": { "title": "Collections", "desc": "Organized structure" },
+      "environments": { "title": "Environments", "desc": "Dev / Staging / Prod" },
+      "workspaces": { "title": "Workspaces", "desc": "Team collaboration" }
+    }
+  },
+  "register": {
+    "title": "Create your account",
+    "subtitle": "Start testing APIs with your team today",
+    "success": "Account created! Redirecting…",
+    "nameLabel": "Full name",
+    "namePlaceholder": "John Doe",
+    "passwordPlaceholder": "At least 8 characters",
+    "confirmPasswordLabel": "Confirm password",
+    "confirmPasswordPlaceholder": "Re-enter your password",
+    "submit": "Create account",
+    "submitting": "Creating account…",
+    "hasAccount": "Already have an account?",
+    "signIn": "Sign in",
+    "heroTitle": "Your team's API\ncommand center.",
+    "heroHighlight": "command center.",
+    "heroDesc": "Get started for free. Create workspaces, invite your team, and collaborate on API testing.",
+    "features": {
+      "free": { "value": "Free", "label": "to get started" },
+      "real": { "value": "Real", "label": "HTTP execution" },
+      "vars": { "value": "{{vars}}", "label": "Environment support" },
+      "team": { "value": "Team", "label": "Collaboration" }
+    }
+  }
+}

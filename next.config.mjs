@@ -1,3 +1,12 @@
+import bundleAnalyzer from '@next/bundle-analyzer'
+import createNextIntlPlugin from 'next-intl/plugin'
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+})
+
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
+
 /** @type {import('next').NextConfig} */
 const securityHeaders = [
   // Prevent framing by other origins (clickjacking)
@@ -32,4 +41,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig;
+export default withNextIntl(withBundleAnalyzer(nextConfig))

@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useState, useRef, useEffect, useCallback, type Dispatch, type SetStateAction, type RefObject } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 import type {
   Workspace, Collection, SavedRequest, FolderNode, FolderTreeResult,
@@ -331,82 +332,24 @@ export const SidebarPanel = memo(function SidebarPanel({
 
         {/* ── History section ── */}
         {sidebarSection === 'history' && (
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 shrink-0">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">History</span>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {loadingHistory && <p className="text-xs text-gray-600 px-4 py-3">Loading...</p>}
-              {!loadingHistory && history.length === 0 && <p className="text-xs text-gray-600 px-4 py-3">No history yet. Send a request to see it here.</p>}
-              {history.map(h => (
-                <div key={h.id} className="group px-4 py-2.5 hover:bg-gray-800/60 cursor-pointer border-b border-gray-800/40"
-                  onClick={() => openHistoryInTab(h)}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold ${METHOD_COLOR[h.method as HttpMethod] ?? 'text-gray-400'}`}>{h.method}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusBg(h.status)} ${statusColor(h.status)}`}>{h.status}</span>
-                    <span className="text-[10px] text-gray-600">{h.durationMs}ms</span>
-                    <span className="text-[10px] text-gray-700 ml-auto">{timeAgo(h.createdAt)}</span>
-                  </div>
-                  <p className="text-[11px] text-gray-400 truncate mt-0.5 font-mono">{h.url}</p>
-                </div>
-              ))}
-              {!loadingHistory && history.length > 0 && history.length % 50 === 0 && (
-                <button
-                  onClick={loadMoreHistory}
-                  className="w-full text-xs text-orange-400 hover:text-orange-300 py-3 hover:bg-gray-800/40 transition"
-                >
-                  Load more
-                </button>
-              )}
-            </div>
-          </div>
+          <HistoryList
+            history={history}
+            loadingHistory={loadingHistory}
+            openHistoryInTab={openHistoryInTab}
+            loadMoreHistory={loadMoreHistory}
+          />
         )}
 
         {/* ── Activity section ── */}
         {sidebarSection === 'activity' && (
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 shrink-0">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Activity</span>
-              <button onClick={loadActivity} title="Refresh" className="text-gray-600 hover:text-gray-300 transition">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {loadingActivity && <p className="text-xs text-gray-600 px-4 py-3 text-center">Loading…</p>}
-              {!loadingActivity && !currentWs && <p className="text-xs text-gray-600 px-4 py-3">Select a workspace first.</p>}
-              {!loadingActivity && currentWs && activityLogs.length === 0 && <p className="text-xs text-gray-600 px-4 py-3">No activity yet.</p>}
-              {activityLogs.map(log => {
-                const color = ACTION_COLORS[log.action] ?? 'text-gray-400'
-                return (
-                  <div key={log.id} className="px-4 py-2.5 border-b border-gray-800/40 hover:bg-gray-800/30 transition">
-                    <div className="flex items-start gap-2">
-                      <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[9px] font-bold text-gray-300 shrink-0 mt-0.5">
-                        {log.userName?.[0]?.toUpperCase() ?? '?'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] text-gray-300 leading-snug">
-                          <span className="font-medium">{log.userName}</span>
-                          {' '}<span className={`font-medium ${color}`}>{log.action}</span>
-                          {' '}<span className="text-gray-500">{log.resourceType}</span>
-                          {' '}<span className="text-gray-200 font-medium truncate">&ldquo;{log.resourceName}&rdquo;</span>
-                        </p>
-                        {log.details && <p className="text-[10px] text-gray-600 mt-0.5 truncate">{log.details}</p>}
-                        <p className="text-[10px] text-gray-700 mt-0.5">{timeAgo(log.createdAt)}</p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              {!loadingActivity && activityLogs.length > 0 && dbActivityCount % 50 === 0 && (
-                <button
-                  onClick={loadMoreActivity}
-                  className="w-full text-xs text-orange-400 hover:text-orange-300 py-3 hover:bg-gray-800/40 transition"
-                >
-                  Load more
-                </button>
-              )}
-            </div>
-          </div>
+          <ActivityList
+            activityLogs={activityLogs}
+            loadingActivity={loadingActivity}
+            currentWs={currentWs}
+            loadActivity={loadActivity}
+            loadMoreActivity={loadMoreActivity}
+            dbActivityCount={dbActivityCount}
+          />
         )}
 
         {/* ── E2E Tests section ── */}
@@ -421,3 +364,161 @@ export const SidebarPanel = memo(function SidebarPanel({
     </>
   )
 })
+
+/* ══════════════════════════════════════════════════════════════
+   HistoryList — virtualized history panel
+   ══════════════════════════════════════════════════════════════ */
+const HISTORY_ITEM_HEIGHT = 56 // px — matches px-4 py-2.5 + two text lines
+
+function HistoryList({ history, loadingHistory, openHistoryInTab, loadMoreHistory }: {
+  history: HistoryEntry[]
+  loadingHistory: boolean
+  openHistoryInTab: (h: HistoryEntry) => void
+  loadMoreHistory: () => void
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const showLoadMore = !loadingHistory && history.length > 0 && history.length % 50 === 0
+  // Add 1 virtual item for the "Load more" button when it's visible
+  const itemCount = history.length + (showLoadMore ? 1 : 0)
+
+  const virtualizer = useVirtualizer({
+    count: itemCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => HISTORY_ITEM_HEIGHT,
+    overscan: 8,
+  })
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">History</span>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {loadingHistory && <p className="text-xs text-gray-600 px-4 py-3">Loading...</p>}
+        {!loadingHistory && history.length === 0 && (
+          <p className="text-xs text-gray-600 px-4 py-3">No history yet. Send a request to see it here.</p>
+        )}
+        {history.length > 0 && (
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualizer.getVirtualItems().map(vItem => {
+              // Last virtual item is the "Load more" button
+              if (vItem.index === history.length) {
+                return (
+                  <div key="load-more" style={{ position: 'absolute', top: vItem.start, left: 0, right: 0, height: vItem.size }}>
+                    <button
+                      onClick={loadMoreHistory}
+                      className="w-full text-xs text-orange-400 hover:text-orange-300 py-3 hover:bg-gray-800/40 transition"
+                    >
+                      Load more
+                    </button>
+                  </div>
+                )
+              }
+              const h = history[vItem.index]
+              return (
+                <div
+                  key={h.id}
+                  style={{ position: 'absolute', top: vItem.start, left: 0, right: 0, height: vItem.size }}
+                  className="group px-4 py-2.5 hover:bg-gray-800/60 cursor-pointer border-b border-gray-800/40"
+                  onClick={() => openHistoryInTab(h)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold ${METHOD_COLOR[h.method as HttpMethod] ?? 'text-gray-400'}`}>{h.method}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusBg(h.status)} ${statusColor(h.status)}`}>{h.status}</span>
+                    <span className="text-[10px] text-gray-600">{h.durationMs}ms</span>
+                    <span className="text-[10px] text-gray-700 ml-auto">{timeAgo(h.createdAt)}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 truncate mt-0.5 font-mono">{h.url}</p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ActivityList — virtualized activity log panel
+   ══════════════════════════════════════════════════════════════ */
+const ACTIVITY_ITEM_HEIGHT = 68 // px — matches py-2.5 + 3 text lines
+
+function ActivityList({ activityLogs, loadingActivity, currentWs, loadActivity, loadMoreActivity, dbActivityCount }: {
+  activityLogs: ActivityLogEntry[]
+  loadingActivity: boolean
+  currentWs: Workspace | null
+  loadActivity: () => void
+  loadMoreActivity: () => void
+  dbActivityCount: number
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const showLoadMore = !loadingActivity && activityLogs.length > 0 && dbActivityCount % 50 === 0
+  const itemCount = activityLogs.length + (showLoadMore ? 1 : 0)
+
+  const virtualizer = useVirtualizer({
+    count: itemCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ACTIVITY_ITEM_HEIGHT,
+    overscan: 8,
+  })
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Activity</span>
+        <button onClick={loadActivity} title="Refresh" className="text-gray-600 hover:text-gray-300 transition">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+        </button>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {loadingActivity && <p className="text-xs text-gray-600 px-4 py-3 text-center">Loading…</p>}
+        {!loadingActivity && !currentWs && <p className="text-xs text-gray-600 px-4 py-3">Select a workspace first.</p>}
+        {!loadingActivity && currentWs && activityLogs.length === 0 && <p className="text-xs text-gray-600 px-4 py-3">No activity yet.</p>}
+        {activityLogs.length > 0 && (
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualizer.getVirtualItems().map(vItem => {
+              if (vItem.index === activityLogs.length) {
+                return (
+                  <div key="load-more" style={{ position: 'absolute', top: vItem.start, left: 0, right: 0, height: vItem.size }}>
+                    <button
+                      onClick={loadMoreActivity}
+                      className="w-full text-xs text-orange-400 hover:text-orange-300 py-3 hover:bg-gray-800/40 transition"
+                    >
+                      Load more
+                    </button>
+                  </div>
+                )
+              }
+              const log = activityLogs[vItem.index]
+              const color = ACTION_COLORS[log.action] ?? 'text-gray-400'
+              return (
+                <div
+                  key={log.id}
+                  style={{ position: 'absolute', top: vItem.start, left: 0, right: 0, height: vItem.size }}
+                  className="px-4 py-2.5 border-b border-gray-800/40 hover:bg-gray-800/30 transition"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[9px] font-bold text-gray-300 shrink-0 mt-0.5">
+                      {log.userName?.[0]?.toUpperCase() ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-gray-300 leading-snug">
+                        <span className="font-medium">{log.userName}</span>
+                        {' '}<span className={`font-medium ${color}`}>{log.action}</span>
+                        {' '}<span className="text-gray-500">{log.resourceType}</span>
+                        {' '}<span className="text-gray-200 font-medium truncate">&ldquo;{log.resourceName}&rdquo;</span>
+                      </p>
+                      {log.details && <p className="text-[10px] text-gray-600 mt-0.5 truncate">{log.details}</p>}
+                      <p className="text-[10px] text-gray-700 mt-0.5">{timeAgo(log.createdAt)}</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

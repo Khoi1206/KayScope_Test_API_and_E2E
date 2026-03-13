@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { exec } from 'child_process'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
+import { requireSession } from '@/lib/auth/session'
 
 const GENERATED_DIR = join(process.cwd(), 'tests', 'e2e', 'generated')
 const SPEC_FILE = join(GENERATED_DIR, 'builder-test.spec.ts')
@@ -9,6 +10,17 @@ const BUILDER_CONFIG = join(process.cwd(), 'playwright.builder.config.ts').repla
 const CWD = process.cwd()
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireSession()
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Only allow in development for safety
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ ok: false, error: 'UI runner is disabled in production' }, { status: 403 })
+  }
+
   try {
     const { code } = await req.json()
 

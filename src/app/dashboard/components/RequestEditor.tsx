@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useState, useRef, useMemo, useEffect } from 'react'
+import { Listbox } from '@headlessui/react'
 import type {
   HttpMethod, KV, ReqBody, ReqAuth,
   RawBodyType, ScriptResult,
@@ -158,10 +159,29 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
       {/* URL bar */}
       <div className="px-4 py-3 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-2">
-          <select value={method} onChange={e => setMethod(e.target.value as HttpMethod)}
-            className={`bg-gray-800 border border-gray-700 rounded-md px-2 py-2 text-sm font-bold focus:outline-none focus:border-orange-500 ${METHOD_COLOR[method]}`}>
-            {HTTP_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Listbox value={method} onChange={setMethod}>
+            <div className="relative">
+              <Listbox.Button className={`flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm font-bold focus:outline-none focus:border-orange-500 hover:border-gray-500 transition w-[105px] ${METHOD_COLOR[method]}`}>
+                <span className="flex-1 text-left">{method}</span>
+                <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </Listbox.Button>
+              <Listbox.Options className="absolute left-0 mt-1 w-32 bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl z-50 py-1 focus:outline-none">
+                {HTTP_METHODS.map(m => (
+                  <Listbox.Option key={m} value={m} className={({ active }) =>
+                    `flex items-center gap-2 px-3 py-2 text-xs font-bold cursor-pointer transition ${
+                      active ? 'bg-gray-700/60' : ''
+                    } ${METHOD_COLOR[m]}`}>
+                    {({ selected }) => (<>
+                      <span className="flex-1">{m}</span>
+                      {selected && <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
+                    </>)}
+                  </Listbox.Option>
+                ))}
+              </Listbox.Options>
+            </div>
+          </Listbox>
 
           {/* URL input wrapper — relative so the popup can be positioned below it */}
           <div className="relative flex-1">

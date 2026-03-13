@@ -121,8 +121,29 @@ async function importKayScope(
 
   // Recreate folders, mapping exported IDs → new MongoDB IDs
   const folderIdMap: Record<string, string> = {}
-  const foldersData = (data.folders ?? []) as Array<{ id: string; parentFolderId?: string | null; name: string }>
-  // Process folders in order (assumes parents come before children in export)
+  const rawFolders = (data.folders ?? []) as Array<{ id: string; parentFolderId?: string | null; name: string }>
+
+  // Topologically sort folders so parents always come before children,
+  // regardless of the order MongoDB returned them in the original export.
+  const foldersData: typeof rawFolders = []
+  const addedFolderIds = new Set<string>()
+  const bfsQueue = rawFolders.filter(f => !f.parentFolderId)
+  while (bfsQueue.length > 0) {
+    const f = bfsQueue.shift()!
+    if (addedFolderIds.has(f.id)) continue
+    foldersData.push(f)
+    addedFolderIds.add(f.id)
+    for (const child of rawFolders) {
+      if (child.parentFolderId === f.id && !addedFolderIds.has(child.id)) {
+        bfsQueue.push(child)
+      }
+    }
+  }
+  // Append any orphaned/circular-reference folders as root folders
+  for (const f of rawFolders) {
+    if (!addedFolderIds.has(f.id)) foldersData.push(f)
+  }
+
   for (const f of foldersData) {
     const newParentId = f.parentFolderId ? folderIdMap[f.parentFolderId] : undefined
     const folder = await folderRepo.create({
