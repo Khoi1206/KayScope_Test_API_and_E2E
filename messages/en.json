@@ -20,7 +20,30 @@
     "syncDisconnected": "Sync disconnected — reconnecting…",
     "noEnvironment": "No Environment",
     "signOut": "Sign out",
-    "language": "Language"
+    "language": "Language",
+    "theme": "Toggle theme",
+    "profile": "My Profile"
+  },
+  "profile": {
+    "title": "My Profile",
+    "nameLabel": "Display Name",
+    "namePlaceholder": "Enter your name",
+    "emailLabel": "Email Address",
+    "save": "Save",
+    "saved": "Saved!",
+    "saving": "Saving\u2026",
+    "saveFailed": "Failed to save",
+    "nameMin": "Name must be at least 2 characters",
+    "joined": "Joined",
+    "changePassword": "Change Password",
+    "currentPw": "Current password",
+    "newPw": "New password (min. 8 chars)",
+    "confirmPw": "Confirm new password",
+    "pwMin": "Password must be at least 8 characters",
+    "pwMismatch": "Passwords do not match",
+    "currentPwRequired": "Current password is required",
+    "pwUpdated": "Password updated successfully!",
+    "updatePassword": "Update Password"
   },
   "workspaces": {
     "title": "Workspaces",

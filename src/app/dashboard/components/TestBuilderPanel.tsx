@@ -1,11 +1,10 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { CodePreview } from '@/app/test-builder/components/CodePreview'
 import { ResultsPanel } from '@/app/test-builder/components/ResultsPanel'
 import type { RunResult } from '@/app/test-builder/types'
-import { saveTestRun } from './TestsSidebarPanel'
 
 // Blockly is browser-only
 const BlocklyEditor = dynamic(
@@ -18,13 +17,27 @@ const BlocklyEditor = dynamic(
  * Same Blockly workspace + code preview + results panel as the standalone page,
  * but without its own nav header (the AppShell header is used instead).
  */
-export function TestBuilderPanel() {
+export function TestBuilderPanel({
+  initialBlocklyState,
+  onBlocklyStateChange,
+  workspaceId,
+  canGoBack,
+  onGoBack,
+}: {
+  initialBlocklyState?: object
+  onBlocklyStateChange?: (state: object) => void
+  workspaceId?: string
+  canGoBack?: boolean
+  onGoBack?: () => void
+}) {
   const [code, setCode] = useState('')
   const [testCount, setTestCount] = useState(0)
   const [running, setRunning] = useState(false)
   const [openingUi, setOpeningUi] = useState(false)
   const [result, setResult] = useState<RunResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /* Local ref to always have current blockly state when saving a run */
+  const blocklyStateRef = useRef<object | undefined>(initialBlocklyState)
 
   const handleCodeChange = useCallback((newCode: string, count: number) => {
     setCode(newCode)
@@ -73,13 +86,22 @@ export function TestBuilderPanel() {
         setResult(runResult)
         const nameMatch = code.match(/test\(`([^`]+)`/)
         const testName = nameMatch?.[1] ?? 'Unnamed Test'
-        saveTestRun({
-          id: Date.now().toString(),
-          name: testName,
-          code,
-          result: runResult,
-          savedAt: new Date().toISOString(),
-        })
+        if (workspaceId) {
+          fetch('/api/test-runs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workspaceId,
+              name: testName,
+              code,
+              blocklyState: blocklyStateRef.current,
+              result: runResult,
+              savedAt: new Date().toISOString(),
+            }),
+          })
+            .then(() => window.dispatchEvent(new Event('kayscope_runs_updated')))
+            .catch(() => {})
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error')
@@ -100,6 +122,17 @@ export function TestBuilderPanel() {
         </span>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Back to previous workspace */}
+          {canGoBack && onGoBack && (
+            <button
+              onClick={onGoBack}
+              title="Go back to previous workspace"
+              className="flex items-center gap-1 rounded border border-gray-700 bg-gray-800/60 px-2.5 py-1
+                text-xs text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
+            >
+              ← Back
+            </button>
+          )}
           {/* Run button */}
           <button
             onClick={handleRun}
@@ -160,7 +193,11 @@ export function TestBuilderPanel() {
         {/* Blockly workspace */}
         <div className="relative min-w-0 flex-1 border-r border-gray-800">
           <div className="absolute inset-0">
-            <BlocklyEditor onCodeChange={handleCodeChange} />
+            <BlocklyEditor
+              onCodeChange={handleCodeChange}
+              initialState={initialBlocklyState}
+              onStateChange={s => { blocklyStateRef.current = s; onBlocklyStateChange?.(s) }}
+            />
           </div>
           {testCount === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

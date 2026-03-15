@@ -12,8 +12,12 @@ import { PLAYWRIGHT_TOOLBOX, INITIAL_STATE } from '../blockly/toolbox'
  */
 export function BlocklyEditor({
   onCodeChange,
+  initialState,
+  onStateChange,
 }: {
   onCodeChange: (code: string, testCount: number) => void
+  initialState?: object
+  onStateChange?: (state: object) => void
 }) {
   const divRef = useRef<HTMLDivElement>(null)
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null)
@@ -22,6 +26,11 @@ export function BlocklyEditor({
   useEffect(() => {
     callbackRef.current = onCodeChange
   })
+  const stateCallbackRef = useRef(onStateChange)
+  useEffect(() => {
+    stateCallbackRef.current = onStateChange
+  })
+  const initialStateRef = useRef(initialState)
 
   useEffect(() => {
     if (!divRef.current || workspaceRef.current) return
@@ -67,9 +76,10 @@ export function BlocklyEditor({
     }
     workspaceRef.current = ws
 
-    /* ── Load initial example using v12 JSON serialization ────────── */
+    /* ── Load initial state or fallback example ─────────────────── */
     try {
-      Blockly.serialization.workspaces.load(INITIAL_STATE, ws, { recordUndo: false })
+      const stateToLoad = initialStateRef.current ?? INITIAL_STATE
+      Blockly.serialization.workspaces.load(stateToLoad, ws, { recordUndo: false })
     } catch {
       // If load fails, start with blank workspace
     }
@@ -85,6 +95,12 @@ export function BlocklyEditor({
         return
       const { code, testCount } = workspaceToSpec(ws, gen)
       callbackRef.current(code, testCount)
+      if (stateCallbackRef.current) {
+        try {
+          const state = Blockly.serialization.workspaces.save(ws)
+          stateCallbackRef.current(state)
+        } catch { /* ignore serialization errors */ }
+      }
     }
 
     ws.addChangeListener(handleChange)

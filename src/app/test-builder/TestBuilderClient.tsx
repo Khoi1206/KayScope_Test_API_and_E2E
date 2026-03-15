@@ -5,7 +5,6 @@ import { useState, useCallback } from 'react'
 import { CodePreview } from './components/CodePreview'
 import { ResultsPanel } from './components/ResultsPanel'
 import type { RunResult } from './types'
-import { saveTestRun } from '@/app/dashboard/components/TestsSidebarPanel'
 
 // Blockly must render only in the browser — load with no SSR
 const BlocklyEditor = dynamic(
@@ -57,16 +56,6 @@ export function TestBuilderClient() {
       } else {
         const runResult = data as RunResult
         setResult(runResult)
-        // Extract first test name from generated code for display in sidebar
-        const nameMatch = code.match(/test\(`([^`]+)`/)
-        const testName = nameMatch?.[1] ?? 'Unnamed Test'
-        saveTestRun({
-          id: Date.now().toString(),
-          name: testName,
-          code,
-          result: runResult,
-          savedAt: new Date().toISOString(),
-        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error')

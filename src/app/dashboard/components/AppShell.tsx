@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useRef, useMemo, useCallback } from 'react'
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 
 import type { Workspace, SavedRequest } from './types'
 import { METHOD_COLOR } from './constants'
@@ -8,6 +8,7 @@ import { ConfirmModal } from './ConfirmModal'
 import { RenameModal } from './RenameModal'
 import { EnvEditorModal } from './EnvEditorModal'
 import { MembersModal } from './MembersModal'
+import { ProfileModal } from './ProfileModal'
 import { SaveToCollectionModal } from './SaveToCollectionModal'
 import { TestBuilderPanel } from './TestBuilderPanel'
 import { ResponsePanel } from './ResponsePanel'
@@ -22,7 +23,8 @@ import {
 } from '../hooks'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function AppShell({ userName, userEmail: _userEmail, userId }: { userName: string; userEmail: string; userId: string }) {
+export function AppShell({ userName: initialUserName, userEmail: _userEmail, userId }: { userName: string; userEmail: string; userId: string }) {
+  const [userName, setUserName] = useState(initialUserName)
 
   /* ══════════════════════════════════════════════════════════════
      CUSTOM HOOKS — workspace, env, history, toast, collections
@@ -59,12 +61,44 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
   } = useHistoryActivity(currentWs, sidebarSection)
 
   /* ── Modal state ── */
-  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean; confirmLabel?: string; secondaryAction?: { label: string; onClick: () => void } } | null>(null)
   const [renameModal, setRenameModal] = useState<{ label: string; currentName: string; onSave: (name: string) => void; title?: string } | null>(null)
   const [membersModalWs, setMembersModalWs] = useState<Workspace | null>(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [testBuilderKey, setTestBuilderKey] = useState(0)
+  const [canGoBack, setCanGoBack] = useState(false)
 
   /* ── Import ref ── */
   const importFileRef = useRef<HTMLInputElement>(null)
+  /* Persist Blockly workspace state across TestBuilderPanel unmounts */
+  const testBlocklyStateRef = useRef<object | undefined>(undefined)
+  /* Stack of previous Blockly states for back-navigation */
+  const blocklyStateStackRef = useRef<object[]>([])
+
+  const handleOpenTestRun = useCallback((run: import('./TestsSidebarPanel').SavedTestRun) => {
+    if (run.blocklyState) {
+      // Push current state (even if undefined = blank workspace) so Back always works
+      blocklyStateStackRef.current.push(testBlocklyStateRef.current as object)
+      setCanGoBack(true)
+      testBlocklyStateRef.current = run.blocklyState
+      setTestBuilderKey(k => k + 1)
+    }
+    setSidebarSection('tests')
+  }, [setSidebarSection])
+
+  const handleGoBackTestRun = useCallback(() => {
+    const prev = blocklyStateStackRef.current.pop()
+    testBlocklyStateRef.current = prev
+    setCanGoBack(blocklyStateStackRef.current.length > 0)
+    setTestBuilderKey(k => k + 1)
+  }, [])
+
+  /* Clear back-stack on workspace switch so stale states don't bleed across workspaces */
+  useEffect(() => {
+    blocklyStateStackRef.current = []
+    testBlocklyStateRef.current = undefined
+    setCanGoBack(false)
+  }, [currentWs?.id])
 
   /* ══════════════════════════════════════════════════════════════
      REQUEST EDITOR HOOK (uses ref bridge for setRequestsByCol)
@@ -151,6 +185,43 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
   /* Wire up the ref bridge now that both hooks are initialized */
   setRequestsByColProxy.current = setRequestsByCol
 
+  /* Close a tab — shows confirm if it has unsaved changes */
+  const handleTabClose = useCallback((tabId: string) => {
+    const tab = tabs.find(t => t.id === tabId)
+    if (!tab) return
+    if (tab.dirty) {
+      const label = tab.id === activeTabId ? reqName : tab.label
+      setConfirmModal({
+        title: 'Unsaved Changes',
+        message: `"${label}" has unsaved changes.`,
+        confirmLabel: "Don't Save",
+        onConfirm: () => { setConfirmModal(null); closeTab(tabId) },
+        destructive: false,
+        secondaryAction: {
+          label: 'Save Changes',
+          onClick: async () => {
+            setConfirmModal(null)
+            if (tabId !== activeTabId) { switchToTab(tabId); return }
+            await saveRequest()
+            closeTab(tabId)
+          },
+        },
+      })
+      return
+    }
+    closeTab(tabId)
+  }, [tabs, activeTabId, reqName, closeTab, switchToTab, saveRequest, setConfirmModal])
+
+  /* Stable wrappers so RequestEditor (which is memo'd) doesn't re-render
+     when AppShell re-renders due to unrelated state (modals, live sync, etc.) */
+  const saveRequestRef = useRef(saveRequest)
+  saveRequestRef.current = saveRequest
+  const stableSaveRequest = useCallback(() => saveRequestRef.current(), [])
+
+  const sendRequestRef = useRef(sendRequest)
+  sendRequestRef.current = sendRequest
+  const stableSendRequest = useCallback(() => sendRequestRef.current(), [])
+
   const { liveConnected } = useLiveSync(currentWs?.id, userId, {
     reloadCollections,
     reloadEnvironments,
@@ -164,7 +235,7 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
      ───────────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="flex flex-col h-screen bg-[#1a1a1a] text-gray-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-th-bg text-th-text overflow-hidden">
       {/* Hidden file input for import */}
       <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
 
@@ -180,6 +251,13 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
       )}
       {membersModalWs && (
         <MembersModal ws={membersModalWs} currentUserId={userId} onClose={() => setMembersModalWs(null)} />
+      )}
+      {showProfileModal && (
+        <ProfileModal
+          initialName={userName}
+          onClose={() => setShowProfileModal(false)}
+          onNameChange={n => setUserName(n)}
+        />
       )}
       {saveToColModal && (
         <SaveToCollectionModal
@@ -205,6 +283,7 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
         environments={environments} currentEnvId={currentEnvId} setCurrentEnvId={setCurrentEnvId}
         setMembersModalWs={setMembersModalWs} setRenameModal={setRenameModal} setConfirmModal={setConfirmModal}
         userName={userName}
+        onOpenProfile={() => setShowProfileModal(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -233,15 +312,30 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
           dbActivityCount={dbActivityCount}
           setConfirmModal={setConfirmModal} setRenameModal={setRenameModal}
           currentEnvName={currentEnv?.name}
+          onOpenTestRun={handleOpenTestRun}
         />
         </ErrorBoundary>
 
         {/* ══ Main content ══ */}
         <main className="flex flex-col flex-1 overflow-hidden">
 
-          {sidebarSection === 'tests' ? <ErrorBoundary label="Test Builder"><TestBuilderPanel /></ErrorBoundary> : (<>
+          {/* TestBuilderPanel: only mounted when active, state persisted via ref */}
+          {sidebarSection === 'tests' && (
+            <ErrorBoundary label="Test Builder">
+              <TestBuilderPanel
+                key={testBuilderKey}
+                initialBlocklyState={testBlocklyStateRef.current}
+                onBlocklyStateChange={s => { testBlocklyStateRef.current = s }}
+                workspaceId={currentWs?.id}
+                canGoBack={canGoBack}
+                onGoBack={handleGoBackTestRun}
+              />
+            </ErrorBoundary>
+          )}
+
+          {sidebarSection !== 'tests' && (<>
           {/* ── Request tab bar ── */}
-          <div className="flex items-center border-b border-gray-800 bg-[#111111] shrink-0">
+          <div className="flex items-center border-b border-th-border bg-th-tabbar shrink-0">
             {tabs.length > 3 && (
               <button onClick={() => tabBarRef.current?.scrollBy({ left: -150, behavior: 'smooth' })} className="px-1.5 py-2 text-gray-600 hover:text-gray-300 shrink-0 transition" title="Scroll left">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -256,23 +350,40 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
                 <div
                   key={tab.id}
                   onClick={() => switchToTab(tab.id)}
-                  className={`group flex items-center gap-1.5 px-3 py-2 text-xs cursor-pointer border-r border-gray-800/80 shrink-0 max-w-[200px] min-w-[80px] transition ${
+                  className={`group flex items-center gap-1.5 px-3 py-2 text-xs cursor-pointer border-r border-th-border/80 shrink-0 max-w-[200px] min-w-[80px] transition ${
                     isActive
-                      ? 'bg-[#1c1c1c] border-t-[2px] border-t-orange-500'
-                      : 'text-gray-500 hover:bg-gray-800/50 hover:text-gray-300 border-t-[2px] border-t-transparent'
+                      ? 'bg-th-nav border-t-[2px] border-t-orange-500'
+                      : 'text-th-text-3 hover:bg-th-input/50 hover:text-th-text-2 border-t-[2px] border-t-transparent'
                   }`}
                 >
                   <span className={`text-[10px] font-bold shrink-0 ${METHOD_COLOR[displayMethod]}`}>{displayMethod.slice(0, 3)}</span>
                   <span className={`truncate flex-1 min-w-0 ${isActive ? 'text-gray-200' : ''}`}>{displayLabel}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); closeTab(tab.id) }}
-                    className="shrink-0 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded"
-                    title="Close tab"
-                  >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  {tab.dirty ? (
+                    <>
+                      {/* Dot: visible at rest; hidden on hover */}
+                      <span className="group-hover:hidden shrink-0 w-1.5 h-1.5 rounded-full bg-orange-400 ml-0.5" />
+                      {/* X: visible on hover, replaces dot */}
+                      <button
+                        onClick={e => { e.stopPropagation(); handleTabClose(tab.id) }}
+                        className="hidden group-hover:block shrink-0 text-gray-600 hover:text-red-400 transition ml-0.5 p-0.5 rounded"
+                        title="Close tab (unsaved changes)"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={e => { e.stopPropagation(); handleTabClose(tab.id) }}
+                      className="shrink-0 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded"
+                      title="Close tab"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -311,7 +422,7 @@ export function AppShell({ userName, userEmail: _userEmail, userId }: { userName
                 reqName={reqName} setReqName={editor.setReqName}
                 method={method} setMethod={editor.setMethod}
                 url={url} setUrl={editor.setUrl}
-                saveRequest={() => saveRequest()} sendRequest={sendRequest}
+                saveRequest={stableSaveRequest} sendRequest={stableSendRequest}
                 isSaving={isSaving} saveFlash={saveFlash}
                 saveError={saveError} setSaveError={setSaveError}
                 isSending={isSending}

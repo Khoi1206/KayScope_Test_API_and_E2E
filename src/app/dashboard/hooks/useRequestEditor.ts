@@ -98,6 +98,8 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
   const abortRef = useRef<AbortController | null>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
   const saveFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /* skipDirtyRef — set true in restoreSnapshot so the dirty effect skips that restore cycle */
+  const skipDirtyRef = useRef(false)
 
   /* Cleanup saveFlash timer on unmount */
   useEffect(() => {
@@ -138,6 +140,7 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
   })
 
   const restoreSnapshot = (s: TabSnapshot) => {
+    skipDirtyRef.current = true  // suppress dirty marking during restore
     setActiveReq(s.activeReq); setIsDraft(s.isDraft)
     setDraftColId(s.draftColId); setDraftFolderId(s.draftFolderId)
     setReqName(s.reqName); setMethod(s.method); setUrl(s.url)
@@ -153,6 +156,16 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
     setVarOverrides(s.varOverrides ?? {})
     setSaveError('')
   }
+
+  /* ── Mark active tab dirty whenever user edits content fields ──
+     skipDirtyRef is set during restoreSnapshot so tab switches / opens
+     don't incorrectly mark a freshly-loaded tab as dirty. */
+  useEffect(() => {
+    if (skipDirtyRef.current) { skipDirtyRef.current = false; return }
+    if (!activeTabId) return
+    setTabs(prev => prev.map(t => t.id === activeTabId && !t.dirty ? { ...t, dirty: true } : t))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reqName, method, url, params, headers, body, auth, preRequestScript, postRequestScript])
 
   const switchToTab = (id: string) => {
     if (id === activeTabId) return
@@ -269,6 +282,7 @@ export function useRequestEditor(deps: UseRequestEditorDeps) {
       setSaveFlash(true)
       if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current)
       saveFlashTimerRef.current = setTimeout(() => { setSaveFlash(false); saveFlashTimerRef.current = null }, 1500)
+      setTabs(prev => prev.map(t => t.id === activeTabIdRef.current ? { ...t, dirty: false } : t))
     } catch (e) { setSaveError(e instanceof Error ? e.message : 'Failed to save request') }
     finally { setIsSaving(false) }
   }

@@ -77,6 +77,9 @@ export interface SidebarPanelProps {
   setConfirmModal: Dispatch<SetStateAction<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>>
   setRenameModal: Dispatch<SetStateAction<{ label: string; currentName: string; onSave: (name: string) => void; title?: string } | null>>
 
+  /* Tests */
+  onOpenTestRun?: (run: import('./TestsSidebarPanel').SavedTestRun) => void
+
   /* Status bar */
   currentEnvName: string | undefined
 }
@@ -115,6 +118,7 @@ export const SidebarPanel = memo(function SidebarPanel({
   activityLogs, loadingActivity, loadActivity, loadMoreActivity, dbActivityCount,
   setConfirmModal, setRenameModal,
   currentEnvName,
+  onOpenTestRun,
 }: SidebarPanelProps) {
 
   /* ── Context menu (owned here, not lifted to parent) ── */
@@ -136,7 +140,7 @@ export const SidebarPanel = memo(function SidebarPanel({
 
   const renderRequest = (req: SavedRequest) => (
     <div key={req.id} onClick={() => openInTab(req)}
-      className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg mx-2 cursor-pointer hover:bg-gray-800/60 ${activeReq?.id === req.id && !isDraft ? 'bg-gray-800' : ''}`}>
+      className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg mx-2 cursor-pointer hover:bg-th-input/60 ${activeReq?.id === req.id && !isDraft ? 'bg-th-input' : ''}`}>
       <span className={`text-[10px] font-bold w-11 shrink-0 ${METHOD_COLOR[req.method]}`}>{req.method}</span>
       <span className="text-xs text-gray-400 truncate flex-1">{req.name}</span>
       <button onClick={e => { e.stopPropagation(); setConfirmModal({ title: 'Delete Request', message: `Delete "${req.name}"?`, onConfirm: async () => { try { await deleteRequest(req) } catch (er) { console.error(er) } setConfirmModal(null) }, destructive: true }) }}
@@ -151,7 +155,7 @@ export const SidebarPanel = memo(function SidebarPanel({
     const isOpen = expandedFolders.has(folderKey)
     return (
       <div key={node.folder.id}>
-        <div className="group flex items-center gap-1.5 px-3 py-2 hover:bg-gray-800/60 rounded-lg mx-2 cursor-pointer" onClick={() => toggleFolder(folderKey)}>
+        <div className="group flex items-center gap-1.5 px-3 py-2 hover:bg-th-input/60 rounded-lg mx-2 cursor-pointer" onClick={() => toggleFolder(folderKey)}>
           <svg className={`w-3.5 h-3.5 text-gray-600 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           <svg className="w-4 h-4 text-yellow-600/70 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
           <span className="text-xs text-gray-400 truncate flex-1">{node.folder.name}</span>
@@ -171,7 +175,7 @@ export const SidebarPanel = memo(function SidebarPanel({
           </div>
         </div>
         {isOpen && (
-          <div className="ml-4 border-l border-gray-800/60 pl-1">
+          <div className="ml-4 border-l border-th-border/60 pl-1">
             {node.children.map(child => renderFolderNode(colId, child, depth + 1))}
             {node.requests.map(req => renderRequest(req))}
           </div>
@@ -183,11 +187,11 @@ export const SidebarPanel = memo(function SidebarPanel({
   return (
     <>
       {/* ══ Left icon strip ══ */}
-      <div className="w-16 flex flex-col items-center pt-3 pb-3 gap-1 bg-[#1c1c1c] border-r border-gray-800/80 shrink-0">
+      <div className="w-16 flex flex-col items-center pt-3 pb-3 gap-1 bg-th-nav border-r border-th-border shrink-0">
         {SIDEBAR_ITEMS.map(item => (
           <button key={item.id} onClick={() => setSidebarSection(prev => prev === item.id ? null : item.id)} title={item.title}
             className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl gap-1 transition ${
-              sidebarSection === item.id ? 'bg-gray-700/70 text-orange-400' : 'text-gray-600 hover:text-gray-300 hover:bg-gray-700/40'
+              sidebarSection === item.id ? 'bg-th-input/70 text-orange-400' : 'text-th-text-3 hover:text-th-text-2 hover:bg-th-input/40'
             }`}>
             {item.icon}
             <span className="text-[8px] font-medium leading-none">{item.label}</span>
@@ -196,20 +200,20 @@ export const SidebarPanel = memo(function SidebarPanel({
         <div className="flex-1" />
         {/* Import */}
         <button onClick={() => importFileRef.current?.click()} disabled={!currentWs} title="Import collection (Postman / KayScope JSON)"
-          className="w-12 h-12 flex items-center justify-center rounded-xl text-gray-600 hover:text-gray-300 hover:bg-gray-700/40 disabled:opacity-30 transition">
+          className="w-12 h-12 flex items-center justify-center rounded-xl text-th-text-3 hover:text-th-text-2 hover:bg-th-input/40 disabled:opacity-30 transition">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
         </button>
       </div>
 
       {/* ══ Sidebar panel ══ */}
       {sidebarSection !== null && (
-      <aside className="w-72 flex flex-col bg-[#141414] border-r border-gray-800 shrink-0">
+      <aside className="w-72 flex flex-col bg-th-sidebar border-r border-th-border shrink-0">
 
         {/* ── Collections section ── */}
         {sidebarSection === 'collections' && (
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 shrink-0">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Collections</span>
+              <span className="text-xs text-th-text-3 font-semibold uppercase tracking-wider">Collections</span>
               <button onClick={() => currentWs && setShowColCreate(v => !v)} disabled={!currentWs}
                 className={`transition ${currentWs ? 'text-gray-500 hover:text-orange-400' : 'text-gray-700 cursor-not-allowed'}`} title={currentWs ? 'New collection' : 'Select a workspace first'}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -220,7 +224,7 @@ export const SidebarPanel = memo(function SidebarPanel({
               <div className="px-3 pb-2 flex flex-col gap-1 shrink-0">
                 <div className="flex gap-1">
                   <input autoFocus value={newColName} onChange={e => { setNewColName(e.target.value); setColCreateError('') }} onKeyDown={e => e.key === 'Enter' && createCollection()} placeholder="Collection name"
-                    className={`flex-1 bg-gray-800 text-gray-200 text-xs px-2 py-1.5 rounded border focus:outline-none ${colCreateError ? 'border-red-500' : 'border-gray-600 focus:border-orange-500'}`} />
+                    className={`flex-1 bg-th-input text-th-text text-xs px-2 py-1.5 rounded border focus:outline-none ${colCreateError ? 'border-red-500' : 'border-th-border-soft focus:border-orange-500'}`} />
                   <button onClick={createCollection} disabled={!newColName.trim()} className="px-2 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded transition">Add</button>
                   <button onClick={() => { setShowColCreate(false); setNewColName(''); setColCreateError('') }} className="px-2 py-1.5 text-gray-400 hover:text-gray-200 text-xs transition">{'\u2715'}</button>
                 </div>
@@ -239,9 +243,9 @@ export const SidebarPanel = memo(function SidebarPanel({
               )}
               {collections.map(col => (
                 <div key={col.id}>
-                  <div className="group flex items-center gap-1.5 px-3 py-2.5 hover:bg-gray-800/60 rounded-lg mx-2 cursor-pointer" onClick={() => toggleCollection(col.id)}>
+                  <div className="group flex items-center gap-1.5 px-3 py-2.5 hover:bg-th-input/60 rounded-lg mx-2 cursor-pointer" onClick={() => toggleCollection(col.id)}>
                     <svg className={`w-3.5 h-3.5 text-gray-600 shrink-0 transition-transform ${expandedCols.has(col.id) ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                    <span className="text-sm text-gray-300 font-medium truncate flex-1">{col.name}</span>
+                    <span className="text-sm text-th-text-2 font-medium truncate flex-1">{col.name}</span>
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
                       <button onClick={e => { e.stopPropagation(); createRequestImmediately(col.id) }} className="text-gray-500 hover:text-orange-400 transition p-1" title="New request">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -253,12 +257,12 @@ export const SidebarPanel = memo(function SidebarPanel({
 
                     {/* Context menu */}
                     {colCtxMenu?.colId === col.id && (
-                      <div ref={colCtxRef} className="fixed z-[80] w-48 bg-[#252525] border border-gray-700 rounded-lg shadow-xl py-1 text-xs" style={{ left: colCtxMenu.x, top: colCtxMenu.y }}>
-                        <button onClick={e => { e.stopPropagation(); createRequestImmediately(col.id); if (!expandedCols.has(col.id)) toggleCollection(col.id); setColCtxMenu(null) }} className="w-full flex items-center gap-2 px-3 py-2 text-gray-300 hover:bg-gray-700 transition text-left">
+                      <div ref={colCtxRef} className="fixed z-[80] w-48 bg-th-raised border border-th-border-soft rounded-lg shadow-xl py-1 text-xs" style={{ left: colCtxMenu.x, top: colCtxMenu.y }}>
+                        <button onClick={e => { e.stopPropagation(); createRequestImmediately(col.id); if (!expandedCols.has(col.id)) toggleCollection(col.id); setColCtxMenu(null) }} className="w-full flex items-center gap-2 px-3 py-2 text-th-text-2 hover:bg-th-input transition text-left">
                           <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                           Add Request
                         </button>
-                        <button onClick={e => { e.stopPropagation(); setColCtxMenu(null); setRenameModal({ label: 'Folder', currentName: '', title: 'New Folder', onSave: (name) => { createFolder(col.id, name.trim()); setRenameModal(null) } }) }} className="w-full flex items-center gap-2 px-3 py-2 text-gray-300 hover:bg-gray-700 transition text-left">
+                        <button onClick={e => { e.stopPropagation(); setColCtxMenu(null); setRenameModal({ label: 'Folder', currentName: '', title: 'New Folder', onSave: (name) => { createFolder(col.id, name.trim()); setRenameModal(null) } }) }} className="w-full flex items-center gap-2 px-3 py-2 text-th-text-2 hover:bg-th-input transition text-left">
                           <svg className="w-3.5 h-3.5 text-yellow-600/70" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
                           Add Folder
                         </button>
@@ -353,7 +357,7 @@ export const SidebarPanel = memo(function SidebarPanel({
         )}
 
         {/* ── E2E Tests section ── */}
-        {sidebarSection === 'tests' && <TestsSidebarPanel />}
+        {sidebarSection === 'tests' && <TestsSidebarPanel onOpen={onOpenTestRun} workspaceId={currentWs?.id} />}
 
         {/* Status bar */}
         <div className="border-t border-gray-800 px-3 py-1.5 shrink-0">
@@ -370,7 +374,7 @@ export const SidebarPanel = memo(function SidebarPanel({
    ══════════════════════════════════════════════════════════════ */
 const HISTORY_ITEM_HEIGHT = 56 // px — matches px-4 py-2.5 + two text lines
 
-function HistoryList({ history, loadingHistory, openHistoryInTab, loadMoreHistory }: {
+const HistoryList = memo(function HistoryList({ history, loadingHistory, openHistoryInTab, loadMoreHistory }: {
   history: HistoryEntry[]
   loadingHistory: boolean
   openHistoryInTab: (h: HistoryEntry) => void
@@ -437,14 +441,14 @@ function HistoryList({ history, loadingHistory, openHistoryInTab, loadMoreHistor
       </div>
     </div>
   )
-}
+})
 
 /* ══════════════════════════════════════════════════════════════
    ActivityList — virtualized activity log panel
    ══════════════════════════════════════════════════════════════ */
 const ACTIVITY_ITEM_HEIGHT = 68 // px — matches py-2.5 + 3 text lines
 
-function ActivityList({ activityLogs, loadingActivity, currentWs, loadActivity, loadMoreActivity, dbActivityCount }: {
+const ActivityList = memo(function ActivityList({ activityLogs, loadingActivity, currentWs, loadActivity, loadMoreActivity, dbActivityCount }: {
   activityLogs: ActivityLogEntry[]
   loadingActivity: boolean
   currentWs: Workspace | null
@@ -521,4 +525,4 @@ function ActivityList({ activityLogs, loadingActivity, currentWs, loadActivity, 
       </div>
     </div>
   )
-}
+})

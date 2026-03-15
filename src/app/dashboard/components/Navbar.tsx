@@ -5,6 +5,7 @@ import { signOut } from 'next-auth/react'
 import { Listbox } from '@headlessui/react'
 import { useTranslations } from 'next-intl'
 import { LocaleSwitcher } from '@/components/LocaleSwitcher'
+import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 
 import type { Workspace, Environment } from './types'
 
@@ -46,6 +47,7 @@ export interface NavbarProps {
 
   /* User */
   userName: string
+  onOpenProfile: () => void
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -63,31 +65,31 @@ export const Navbar = memo(function Navbar({
   liveConnected,
   environments, currentEnvId, setCurrentEnvId,
   setMembersModalWs, setRenameModal, setConfirmModal,
-  userName,
+  userName, onOpenProfile,
 }: NavbarProps) {
   const t = useTranslations()
   return (
-    <nav className="flex items-center h-10 bg-[#1c1c1c] border-b border-gray-800/80 shrink-0 px-2 gap-0.5">
+    <nav className="flex items-center h-10 bg-th-nav border-b border-th-border shrink-0 px-2 gap-0.5">
       {/* Logo */}
       <span className="font-bold text-orange-500 text-sm tracking-tight px-2 shrink-0">KayScope</span>
       <div className="w-px h-5 bg-gray-700 mx-1 shrink-0" />
 
       {/* Workspace dropdown */}
       <div className="relative" ref={wsDropdownRef}>
-        <button onClick={() => setShowWsDropdown(v => !v)} className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-700/60 px-2.5 py-1.5 rounded transition">
+        <button onClick={() => setShowWsDropdown(v => !v)} className="flex items-center gap-1.5 text-xs text-th-text-2 hover:text-th-text hover:bg-th-input/60 px-2.5 py-1.5 rounded transition">
           <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
           <span className="max-w-[130px] truncate">{loadingWs ? t('workspaces.loading') : (currentWs?.name ?? t('workspaces.title'))}</span>
           <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
         </button>
 
         {showWsDropdown && (
-          <div className="absolute top-9 left-0 z-50 w-72 bg-[#252525] border border-gray-700 rounded-lg shadow-2xl overflow-hidden">
-            <div className="px-3 py-2 border-b border-gray-700/50">
-              <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{t('workspaces.title')}</p>
+          <div className="absolute top-9 left-0 z-50 w-72 bg-th-raised border border-th-border-soft rounded-lg shadow-2xl overflow-hidden">
+            <div className="px-3 py-2 border-b border-th-border-soft/50">
+              <p className="text-[10px] text-th-text-3 font-medium uppercase tracking-wider">{t('workspaces.title')}</p>
             </div>
             <div className="py-1 max-h-48 overflow-y-auto">
               {workspaces.map(ws => (
-                <div key={ws.id} className="group flex items-center hover:bg-gray-700/50 transition">
+                <div key={ws.id} className="group flex items-center hover:bg-th-input/50 transition">
                   <button onClick={() => { setCurrentWs(ws); setShowWsDropdown(false) }} className={`flex items-center gap-2 flex-1 text-left px-3 py-2 text-xs ${ws.id === currentWs?.id ? 'text-orange-400 font-medium' : 'text-gray-300'}`}>
                     <svg className="w-3.5 h-3.5 text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
                     {ws.name}
@@ -114,14 +116,14 @@ export const Navbar = memo(function Navbar({
                 <div className="flex flex-col gap-1">
                   <div className="flex gap-1">
                     <input autoFocus value={newWsName} onChange={e => { setNewWsName(e.target.value); setWsCreateError('') }} onKeyDown={e => e.key === 'Enter' && createWorkspace()} placeholder={t('workspaces.namePlaceholder')}
-                      className={`flex-1 bg-gray-800 text-gray-200 text-xs px-2 py-1.5 rounded border focus:outline-none ${wsCreateError ? 'border-red-500' : 'border-gray-600 focus:border-orange-500'}`} />
+                      className={`flex-1 bg-th-input text-th-text text-xs px-2 py-1.5 rounded border focus:outline-none ${wsCreateError ? 'border-red-500' : 'border-th-border-soft focus:border-orange-500'}`} />
                     <button onClick={createWorkspace} className="px-2 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded transition">{t('common.add')}</button>
                     <button onClick={() => { setShowWsCreate(false); setWsCreateError('') }} className="px-2 py-1.5 text-gray-400 hover:text-gray-200 text-xs transition">{'\u2715'}</button>
                   </div>
                   {wsCreateError && <p className="text-[10px] text-red-400 px-1">{wsCreateError}</p>}
                 </div>
               ) : (
-                <button onClick={() => setShowWsCreate(true)} className="w-full flex items-center gap-2 text-xs text-gray-400 hover:text-gray-200 px-2 py-1.5 rounded hover:bg-gray-700 transition">
+                <button onClick={() => setShowWsCreate(true)} className="w-full flex items-center gap-2 text-xs text-th-text-3 hover:text-th-text px-2 py-1.5 rounded hover:bg-th-input transition">
                   <span className="text-orange-500 text-base leading-none">+</span> {t('workspaces.new')}
                 </button>
               )}
@@ -166,10 +168,10 @@ export const Navbar = memo(function Navbar({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </Listbox.Button>
-          <Listbox.Options className="absolute right-0 mt-1 w-48 bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl z-50 py-1 focus:outline-none">
+          <Listbox.Options className="absolute right-0 mt-1 w-48 bg-th-surface border border-th-border-soft rounded-lg shadow-2xl z-50 py-1 focus:outline-none">
             <Listbox.Option value="none" className={({ active }) =>
               `flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition ${
-                active ? 'bg-gray-700/60 text-gray-100' : 'text-gray-400'
+                active ? 'bg-th-input/60 text-th-text' : 'text-th-text-3'
               }`}>
               {({ selected }) => (<>
                 <span className="flex-1">{t('nav.noEnvironment')}</span>
@@ -179,7 +181,7 @@ export const Navbar = memo(function Navbar({
             {environments.map(env => (
               <Listbox.Option key={env.id} value={env.id} className={({ active }) =>
                 `flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition ${
-                  active ? 'bg-gray-700/60 text-gray-100' : 'text-gray-300'
+                  active ? 'bg-th-input/60 text-th-text' : 'text-th-text-2'
                 }`}>
                 {({ selected }) => (<>
                   <span className="flex-1 truncate">{env.name}</span>
@@ -192,11 +194,18 @@ export const Navbar = memo(function Navbar({
       </Listbox>
 
       <LocaleSwitcher />
+      <ThemeSwitcher />
 
       {/* User menu */}
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">{userName?.[0]?.toUpperCase() ?? 'U'}</div>
-        <button onClick={() => signOut({ callbackUrl: '/login' })} className="text-xs text-gray-400 hover:text-gray-200 transition px-2 py-1 rounded hover:bg-gray-800">{t('nav.signOut')}</button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={onOpenProfile}
+          className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white hover:opacity-80 transition"
+          title={t('nav.profile')}
+        >
+          {userName?.[0]?.toUpperCase() ?? 'U'}
+        </button>
+        <button onClick={() => signOut({ callbackUrl: '/login' })} className="text-xs text-th-text-3 hover:text-th-text transition px-2 py-1 rounded hover:bg-th-input">{t('nav.signOut')}</button>
       </div>
     </nav>
   )

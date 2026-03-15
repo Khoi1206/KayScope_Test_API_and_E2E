@@ -49,6 +49,7 @@ export interface TabSnapshot {
 }
 export interface RequestTabMeta {
   id: string; label: string; method: HttpMethod; savedReqId: string | null; snapshot: TabSnapshot | null
+  dirty?: boolean
 }
 export interface FolderNode {
   folder: Folder

@@ -1,13 +1,12 @@
 'use client'
 
 import { SessionProvider } from 'next-auth/react'
+import { ThemeProvider } from 'next-themes'
 
-/**
- * Providers — Wraps the entire app with required context providers.
- * Must be a Client Component because SessionProvider uses React context.
- *
- * Extracted into its own file so layout.tsx remains a Server Component.
- */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>
+  return (
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <SessionProvider>{children}</SessionProvider>
+    </ThemeProvider>
+  )
 }

@@ -28,7 +28,7 @@ export function LocaleSwitcher() {
   }
 
   return (
-    <div className="flex items-center gap-0.5 bg-gray-800 border border-gray-700 rounded px-1 py-0.5" title={t('language')}>
+    <div className="flex items-center gap-0.5 bg-th-input border border-th-border-soft rounded px-1 py-0.5" title={t('language')}>
       {ALL_LOCALES.map((l) => (
         <button
           key={l}
@@ -37,7 +37,7 @@ export function LocaleSwitcher() {
           className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition ${
             l === locale
               ? 'bg-orange-500 text-white'
-              : 'text-gray-400 hover:text-gray-200'
+              : 'text-th-text-3 hover:text-th-text-2'
           }`}
         >
           {LOCALE_LABELS[l]}

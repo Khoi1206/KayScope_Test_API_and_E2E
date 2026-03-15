@@ -18,18 +18,47 @@ import { ScriptEditor } from './ScriptEditor'
 
 /** Return the variable name if the caret sits inside a {{varName}} token, else null. */
 function getVarAtCursor(text: string, pos: number): string | null {
-  const re = /\{\{(\w+)\}\}/g
+  const re = /\{\{(\w*)\}\}/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     // inside the token (exclusive of the outer braces is fine)
-    if (pos > m.index && pos < m.index + m[0].length) return m[1]
+    if (pos > m.index && pos < m.index + m[0].length) return m[1] || null
   }
   return null
 }
 
+/** Render URL text with {{var}} tokens highlighted. Hovering a token shows the variable popup. */
+function renderHighlightedUrl(
+  text: string,
+  onHoverEnter?: (name: string) => void,
+  onHoverLeave?: () => void,
+  onVarMouseDown?: (e: React.MouseEvent) => void,
+): React.ReactNode {
+  const re = /\{\{(\w*)\}\}/g
+  const parts: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const varName = m[1]  // may be '' for {{}}
+    if (m.index > last) parts.push(<span key={`t${m.index}`} className="pointer-events-none">{text.slice(last, m.index)}</span>)
+    parts.push(
+      <span
+        key={`v${m.index}`}
+        className="bg-orange-500/15 text-orange-400 rounded-sm pointer-events-auto cursor-default"
+        onMouseEnter={varName && onHoverEnter ? () => onHoverEnter(varName) : undefined}
+        onMouseLeave={varName ? onHoverLeave : undefined}
+        onMouseDown={onVarMouseDown}
+      >{m[0]}</span>
+    )
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(<span key="tail" className="pointer-events-none">{text.slice(last)}</span>)
+  return parts.length ? <>{parts}</> : null
+}
+
 /** Extract all unique variable names found in a string. */
 function extractVars(text: string): string[] {
-  const re = /\{\{(\w+)\}\}/g
+  const re = /\{\{(\w+)\}\}/g  // only named vars for the tooltip list
   const seen: Record<string, boolean> = {}
   const result: string[] = []
   let m: RegExpExecArray | null
@@ -115,6 +144,8 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
   const [activeVar, setActiveVar] = useState<string | null>(null)
   const [showVarList, setShowVarList] = useState(false)
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const urlHighlightRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   /* Cleanup any pending blur timer on unmount */
   useEffect(() => () => { if (blurTimerRef.current) clearTimeout(blurTimerRef.current) }, [])
@@ -143,12 +174,34 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
   }
 
+  const handleVarHover = (name: string) => {
+    cancelBlur()
+    setActiveVar(name)
+    setShowVarList(false)
+  }
+
+  const handleVarHoverLeave = () => {
+    blurTimerRef.current = setTimeout(() => {
+      setActiveVar(null)
+      setShowVarList(false)
+    }, 200)
+  }
+
+  const handleVarSpanMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    inputRef.current?.focus()
+  }
+
+  const handleUrlScroll = (e: React.UIEvent<HTMLInputElement>) => {
+    if (urlHighlightRef.current) urlHighlightRef.current.scrollLeft = e.currentTarget.scrollLeft
+  }
+
   return (
     <>
       {/* Request name bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-th-border shrink-0">
         <input value={reqName} onChange={e => { setReqName(e.target.value); setSaveError('') }}
-          className="flex-1 bg-transparent text-sm text-gray-200 font-medium focus:outline-none placeholder-gray-600 min-w-0" placeholder="Request name" />
+          className="flex-1 bg-transparent text-sm text-th-text-2 font-medium focus:outline-none placeholder-th-text-3 min-w-0" placeholder="Request name" />
         {saveError && <span className="text-xs text-red-400 shrink-0">{saveError}</span>}
         <button onClick={() => saveRequest()} disabled={isSaving}
           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition ${saveFlash ? 'bg-green-600 text-white' : saveError ? 'bg-red-600/20 text-red-400 border border-red-500/30' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'} disabled:opacity-50`}>
@@ -157,21 +210,21 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
       </div>
 
       {/* URL bar */}
-      <div className="px-4 py-3 border-b border-gray-800 shrink-0">
+      <div className="px-4 py-3 border-b border-th-border shrink-0">
         <div className="flex items-center gap-2">
           <Listbox value={method} onChange={setMethod}>
             <div className="relative">
-              <Listbox.Button className={`flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm font-bold focus:outline-none focus:border-orange-500 hover:border-gray-500 transition w-[105px] ${METHOD_COLOR[method]}`}>
+              <Listbox.Button className={`flex items-center gap-1.5 bg-th-input border border-th-border-soft rounded-md px-3 py-2 text-sm font-bold focus:outline-none focus:border-orange-500 hover:border-th-border transition w-[105px] ${METHOD_COLOR[method]}`}>
                 <span className="flex-1 text-left">{method}</span>
                 <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </Listbox.Button>
-              <Listbox.Options className="absolute left-0 mt-1 w-32 bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl z-50 py-1 focus:outline-none">
+              <Listbox.Options className="absolute left-0 mt-1 w-32 bg-th-surface border border-th-border-soft rounded-lg shadow-2xl z-50 py-1 focus:outline-none">
                 {HTTP_METHODS.map(m => (
                   <Listbox.Option key={m} value={m} className={({ active }) =>
                     `flex items-center gap-2 px-3 py-2 text-xs font-bold cursor-pointer transition ${
-                      active ? 'bg-gray-700/60' : ''
+                      active ? 'bg-th-input/60' : ''
                     } ${METHOD_COLOR[m]}`}>
                     {({ selected }) => (<>
                       <span className="flex-1">{m}</span>
@@ -184,8 +237,17 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
           </Listbox>
 
           {/* URL input wrapper — relative so the popup can be positioned below it */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 bg-th-input rounded-md">
+            {/* Variable highlight overlay — renders {{tokens}} in orange behind the transparent input */}
+            <div
+              ref={urlHighlightRef}
+              aria-hidden
+              className="absolute inset-0 z-10 px-3 py-2 text-sm font-mono text-th-text pointer-events-none overflow-hidden whitespace-pre rounded-md"
+            >
+              {renderHighlightedUrl(url, handleVarHover, handleVarHoverLeave, handleVarSpanMouseDown)}
+            </div>
             <input
+              ref={inputRef}
               value={url}
               onChange={e => setUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendRequest()}
@@ -193,16 +255,20 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
               onKeyUp={handleUrlCursor}
               onSelect={handleUrlCursor}
               onBlur={handleUrlBlur}
+              onScroll={handleUrlScroll}
               placeholder="Enter request URL"
-              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-orange-500 font-mono"
+              style={{ caretColor: 'var(--th-text)' }}
+              className="relative w-full bg-transparent border border-th-border-soft rounded-md px-3 py-2 text-sm text-transparent placeholder-th-text-3 focus:outline-none focus:border-orange-500 font-mono selection:bg-blue-500/30"
             />
 
             {/* ── Variable popup ── */}
             {(activeVar || showVarList) && (urlVars.length > 0 || activeVar) && (
               <div
                 onMouseDown={cancelBlur}
+                onMouseEnter={cancelBlur}
+                onMouseLeave={handleVarHoverLeave}
                 onFocus={cancelBlur}
-                className="absolute top-full left-0 mt-1 z-50 bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl min-w-[260px] max-w-[480px] overflow-hidden"
+                className="absolute top-full left-0 mt-1 z-50 bg-th-surface border border-th-border-soft rounded-lg shadow-2xl min-w-[260px] max-w-[480px] overflow-hidden"
               >
                 {/* Single variable preview */}
                 {activeVar && activeVarInfo && (
@@ -339,10 +405,10 @@ export const RequestEditor = memo(function RequestEditor(props: RequestEditorPro
       </div>
 
       {/* Editor tab strip */}
-      <div className="flex border-b border-gray-800 px-4 shrink-0">
+      <div className="flex border-b border-th-border px-4 shrink-0">
         {(['Params', 'Headers', 'Body', 'Authorization', 'Pre-request', 'Post-request'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`py-2.5 px-3 text-xs font-medium border-b-2 transition ${activeTab === tab ? 'text-orange-400 border-orange-500' : 'text-gray-500 border-transparent hover:text-gray-300'}`}>
+            className={`py-2.5 px-3 text-xs font-medium border-b-2 transition ${activeTab === tab ? 'text-orange-400 border-orange-500' : 'text-th-text-3 border-transparent hover:text-th-text-2'}`}>
             {tab}
           </button>
         ))}

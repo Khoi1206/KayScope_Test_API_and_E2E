@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { memo, useState, useEffect, useCallback } from 'react'
 import type { RunResult } from '@/app/test-builder/types'
 import { timeAgo } from './utils'
 
@@ -8,41 +8,39 @@ export interface SavedTestRun {
   id: string
   name: string
   code: string
+  blocklyState?: object
   result: RunResult
   savedAt: string
 }
 
-const STORAGE_KEY = 'kayscope_e2e_runs'
-const MAX_SAVED = 20
-
-export function loadSavedRuns(): SavedTestRun[] {
-  if (typeof window === 'undefined') return []
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as SavedTestRun[]
-  } catch {
-    return []
-  }
-}
-
-export function saveTestRun(run: SavedTestRun): void {
-  if (typeof window === 'undefined') return
-  const existing = loadSavedRuns()
-  const next = [run, ...existing.filter((r) => r.id !== run.id)].slice(0, MAX_SAVED)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  // Notify other components via storage event (cross-tab)
-  window.dispatchEvent(new Event('kayscope_runs_updated'))
-}
-
-export function TestsSidebarPanel() {
+export const TestsSidebarPanel = memo(function TestsSidebarPanel({
+  onOpen,
+  workspaceId,
+}: {
+  onOpen?: (run: SavedTestRun) => void
+  workspaceId?: string
+}) {
   const [runs, setRuns] = useState<SavedTestRun[]>([])
   const [running, setRunning] = useState<string | null>(null)  // id of the run in progress
 
-  const refresh = useCallback(() => setRuns(loadSavedRuns()), [])
+  const refresh = useCallback(async () => {
+    if (!workspaceId) return
+    try {
+      const res = await fetch(`/api/test-runs?workspaceId=${workspaceId}`)
+      if (res.ok) {
+        const data = (await res.json()) as { runs: SavedTestRun[] }
+        setRuns(data.runs)
+      }
+    } catch {
+      // silent
+    }
+  }, [workspaceId])
 
   useEffect(() => {
     refresh()
-    window.addEventListener('kayscope_runs_updated', refresh)
-    return () => window.removeEventListener('kayscope_runs_updated', refresh)
+    const handler = () => { refresh() }
+    window.addEventListener('kayscope_runs_updated', handler)
+    return () => window.removeEventListener('kayscope_runs_updated', handler)
   }, [refresh])
 
   const handleRerun = async (run: SavedTestRun) => {
@@ -53,20 +51,26 @@ export function TestsSidebarPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: run.code }),
       })
+      if (!res.ok) return
       const data = (await res.json()) as RunResult
-      const updated: SavedTestRun = { ...run, result: data, savedAt: new Date().toISOString() }
-      saveTestRun(updated)
+      const savedAt = new Date().toISOString()
+      await fetch(`/api/test-runs/${run.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result: data, savedAt }),
+      })
+      await refresh()
     } catch {
-      // silent — just update the UI
+      // silent
     } finally {
       setRunning(null)
     }
   }
 
-  const handleDelete = (id: string) => {
-    const next = loadSavedRuns().filter((r) => r.id !== id)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    window.dispatchEvent(new Event('kayscope_runs_updated'))
+  const handleDelete = async (id: string) => {
+    setRuns(prev => prev.filter(r => r.id !== id))
+    const res = await fetch(`/api/test-runs/${id}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) await refresh()  // rollback on failure
   }
 
   return (
@@ -141,6 +145,17 @@ export function TestsSidebarPanel() {
 
                 {/* Actions row */}
                 <div className="flex items-center gap-1.5">
+                  {/* Open blocks */}
+                  {onOpen && (
+                    <button
+                      onClick={() => onOpen(run)}
+                      className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] bg-gray-800
+                        text-gray-400 hover:bg-orange-900/40 hover:text-orange-300 transition"
+                      title="Open blocks in editor"
+                    >
+                      🧩 Open
+                    </button>
+                  )}
                   {/* Re-run */}
                   <button
                     onClick={() => handleRerun(run)}
@@ -178,4 +193,4 @@ export function TestsSidebarPanel() {
       </div>
     </div>
   )
-}
+})

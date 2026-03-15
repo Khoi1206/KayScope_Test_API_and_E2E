@@ -30,4 +30,5 @@ export type UserSession = Omit<User, 'password'>
 export interface UpdateUserDTO {
   name?: string
   avatar?: string
+  password?: string
 }
